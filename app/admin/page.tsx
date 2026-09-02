@@ -25,7 +25,7 @@ export default function AdminPage() {
   const [taps, setTaps] = useState<TapLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // New Card Form
+  // New Card Form State
   const [newCardCode, setNewCardCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -68,7 +68,7 @@ export default function AdminPage() {
     });
 
     if (error) {
-      setMsg({ type: 'error', text: 'Failed to provision card. Code may already exist.' });
+      setMsg({ type: 'error', text: error.message || 'Failed to provision card.' });
     } else {
       setMsg({ type: 'success', text: `Card ${newCardCode.toUpperCase()} successfully provisioned!` });
       setNewCardCode('');
@@ -142,7 +142,7 @@ export default function AdminPage() {
           <form onSubmit={handleProvisionCard} className="flex gap-3">
             <input
               type="text"
-              placeholder="Hardware Code (e.g. CARD-9001)"
+              placeholder="Hardware Code (e.g. CARD-9002)"
               value={newCardCode}
               onChange={(e) => setNewCardCode(e.target.value)}
               className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-600"
