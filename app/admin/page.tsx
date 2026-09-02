@@ -32,7 +32,6 @@ export default function AdminFleetCommand() {
   const fetchCardsAndTelemetry = async () => {
     setLoading(true);
 
-    // Fetch Cards Inventory
     const { data: cardsData } = await supabase
       .from('hardware_cards')
       .select('*, profiles(full_name, email)')
@@ -40,14 +39,12 @@ export default function AdminFleetCommand() {
 
     if (cardsData) setCards(cardsData);
 
-    // Fetch System Tap Telemetry Count
     const { count: tapCount } = await supabase
       .from('card_taps')
       .select('*', { count: 'exact' });
 
     setTotalSystemTaps(tapCount || 0);
 
-    // Fetch Live Tap Log Stream
     const { data: tapLogs } = await supabase
       .from('card_taps')
       .select('id, created_at, hardware_cards(card_code), profiles(full_name, email)')
@@ -60,6 +57,7 @@ export default function AdminFleetCommand() {
   };
 
   useEffect(() => {
+    document.title = 'Fleet Command | PULSE';
     fetchCardsAndTelemetry();
   }, []);
 
@@ -124,7 +122,6 @@ export default function AdminFleetCommand() {
     <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center font-sans">
       <div className="max-w-4xl w-full space-y-6">
         
-        {/* Header Analytics */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-neutral-800 pb-5 gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Fleet Command</h1>
@@ -162,7 +159,6 @@ export default function AdminFleetCommand() {
           </div>
         )}
 
-        {/* Provision Card Form */}
         <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
           <h2 className="text-lg font-semibold text-white">Provision New Hardware Card</h2>
           <form onSubmit={handleAddCard} className="flex gap-3">
@@ -183,7 +179,6 @@ export default function AdminFleetCommand() {
           </form>
         </div>
 
-        {/* Live Tap Event Stream Log */}
         <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
           <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
             <h2 className="text-lg font-semibold text-white">Live System Tap Telemetry Stream</h2>
@@ -215,7 +210,6 @@ export default function AdminFleetCommand() {
           </div>
         </div>
 
-        {/* Hardware Inventory Table */}
         <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
           <h2 className="text-lg font-semibold text-white">Hardware Inventory</h2>
 

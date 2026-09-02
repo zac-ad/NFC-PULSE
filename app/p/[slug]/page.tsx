@@ -31,6 +31,7 @@ export default function ProfilePage({ params }: PageProps) {
 
       if (prof) {
         setProfile(prof);
+        document.title = `${prof.full_name || 'Profile'} | PULSE`;
 
         const { data: allLinks } = await supabase
           .from('profile_links')
@@ -42,6 +43,8 @@ export default function ProfilePage({ params }: PageProps) {
           setLinks(allLinks.filter((l) => l.type !== 'qr'));
           setQrLinks(allLinks.filter((l) => l.type === 'qr'));
         }
+      } else {
+        document.title = 'Profile Not Found | PULSE';
       }
       setLoading(false);
     }
@@ -106,7 +109,6 @@ export default function ProfilePage({ params }: PageProps) {
     <main className="min-h-screen bg-black text-white flex justify-center py-6 px-4 font-sans selection:bg-neutral-800">
       <div className="w-full max-w-sm space-y-5">
         
-        {/* Banner & Avatar Container */}
         <div className="relative">
           <div className="w-full h-44 bg-neutral-900 border border-neutral-800/80 rounded-3xl overflow-hidden shadow-2xl">
             {profile.banner_url ? (
@@ -137,7 +139,6 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Profile Info & Quick Actions */}
         <div className="pt-12 text-center space-y-4">
           <div className="flex items-center justify-center gap-1.5">
             <h1 className="text-xl font-bold tracking-tight text-white">
@@ -154,7 +155,6 @@ export default function ProfilePage({ params }: PageProps) {
             </p>
           )}
 
-          {/* Contact Action Buttons */}
           <div className="flex items-center justify-center gap-3">
             <a
               href={`tel:${profile.phone || ''}`}
@@ -185,7 +185,6 @@ export default function ProfilePage({ params }: PageProps) {
             </a>
           </div>
 
-          {/* Save Contact Primary CTA */}
           <div className="flex items-center gap-2 pt-1">
             <a
               href={`data:text/vcard;charset=utf-8,${vcardData}`}
@@ -215,7 +214,6 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Profile Links Section */}
         <div className="space-y-3 pt-2">
           <div className="inline-block px-3 py-1 bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold rounded-lg">
             Links
@@ -268,7 +266,6 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* QR Codes Section */}
         <div className="space-y-3 pt-2">
           <div className="inline-block px-3 py-1 bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold rounded-lg">
             QR Codes
@@ -310,7 +307,6 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="pt-6 pb-4 text-center space-y-3">
           <Link
             href="/"

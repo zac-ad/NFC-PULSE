@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface LinkItem {
@@ -25,7 +25,6 @@ export default function DashboardPage() {
   const [searchEmail, setSearchEmail] = useState('');
   const [profileId, setProfileId] = useState<string | null>(null);
 
-  // Profile Form State
   const [fullName, setFullName] = useState('');
   const [title, setTitle] = useState('');
   const [company, setCompany] = useState('');
@@ -37,20 +36,21 @@ export default function DashboardPage() {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
-  // Analytics State
   const [tapCount, setTapCount] = useState<number>(0);
   const [recentTaps, setRecentTaps] = useState<TapEvent[]>([]);
 
-  // Items State
   const [items, setItems] = useState<LinkItem[]>([]);
 
-  // Form Inputs for Links & QRs
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [qrTitle, setQrTitle] = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    document.title = 'Dashboard | PULSE';
+  }, []);
 
   const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
     try {
@@ -114,7 +114,8 @@ export default function DashboardPage() {
     setBannerUrl(profile.banner_url || '');
     setIsActive(profile.is_active ?? true);
 
-    // Fetch Links
+    document.title = `${profile.full_name || 'Dashboard'} | PULSE`;
+
     const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
@@ -123,7 +124,6 @@ export default function DashboardPage() {
 
     setItems(profileItems || []);
 
-    // Fetch Tap Analytics
     const { data: tapsData, count } = await supabase
       .from('card_taps')
       .select('*', { count: 'exact' })
@@ -232,7 +232,6 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center font-sans">
       <div className="max-w-2xl w-full space-y-6">
         
-        {/* Header */}
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">PULSE Dashboard</h1>
@@ -252,7 +251,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Profile Lookup */}
         {!profileId ? (
           <form onSubmit={handleFetchProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
             <h2 className="text-lg font-semibold">Access Your Dashboard</h2>
@@ -281,7 +279,6 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-6">
             
-            {/* Analytics Telemetry Section */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
                 <h2 className="text-lg font-semibold">Tap Analytics</h2>
@@ -320,7 +317,6 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Profile Customization Form */}
             <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-lg font-semibold">Profile Customization</h2>
 
@@ -484,7 +480,6 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            {/* Links & Payment QRs */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-lg font-semibold">Manage Profile Links</h2>
 
