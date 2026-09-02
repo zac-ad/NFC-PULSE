@@ -24,6 +24,8 @@ export default function DashboardPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [slug, setSlug] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
   // Links State
@@ -60,6 +62,8 @@ export default function DashboardPage() {
     setPhone(profile.phone || '');
     setEmail(profile.email || '');
     setSlug(profile.slug || '');
+    setAvatarUrl(profile.avatar_url || '');
+    setBannerUrl(profile.banner_url || '');
     setIsActive(profile.is_active ?? true);
 
     // Fetch links
@@ -91,6 +95,8 @@ export default function DashboardPage() {
         phone,
         email,
         slug,
+        avatar_url: avatarUrl,
+        banner_url: bannerUrl,
         is_active: isActive,
       })
       .eq('id', profileId);
@@ -146,7 +152,7 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">PULSE Dashboard</h1>
-            <p className="text-sm text-neutral-400">Manage your live NFC profile & details</p>
+            <p className="text-sm text-neutral-400">Manage your live NFC profile & branding</p>
           </div>
         </div>
 
@@ -193,7 +199,7 @@ export default function DashboardPage() {
             
             {/* Edit Profile Information */}
             <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Profile Details</h2>
+              <h2 className="text-lg font-semibold">Profile & Image Customization</h2>
 
               {/* Public Profile Privacy Switch */}
               <div className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-xl mb-4">
@@ -214,6 +220,36 @@ export default function DashboardPage() {
                 >
                   {isActive ? 'ACTIVE' : 'PRIVATE'}
                 </button>
+              </div>
+
+              {/* Image URL Inputs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-2 border-b border-neutral-900">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
+                    Profile Photo URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/photo-..."
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    autoComplete="off"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
+                    Background Banner URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/photo-..."
+                    value={bannerUrl}
+                    onChange={(e) => setBannerUrl(e.target.value)}
+                    autoComplete="off"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white text-xs"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
