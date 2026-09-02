@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface LinkItem {
@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [slug, setSlug] = useState('');
+  const [isActive, setIsActive] = useState<boolean>(true);
 
   // Links State
   const [links, setLinks] = useState<LinkItem[]>([]);
@@ -59,6 +60,7 @@ export default function DashboardPage() {
     setPhone(profile.phone || '');
     setEmail(profile.email || '');
     setSlug(profile.slug || '');
+    setIsActive(profile.is_active ?? true);
 
     // Fetch links
     const { data: profileLinks } = await supabase
@@ -89,6 +91,7 @@ export default function DashboardPage() {
         phone,
         email,
         slug,
+        is_active: isActive,
       })
       .eq('id', profileId);
 
@@ -159,9 +162,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Step 1: Profile Lookup / Authentication Gate */}
+        {/* Profile Lookup */}
         {!profileId ? (
-          <form onSubmit={handleFetchProfile} className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+          <form onSubmit={handleFetchProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
             <h2 className="text-lg font-semibold">Access Your Dashboard</h2>
             <div>
               <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
@@ -173,6 +176,7 @@ export default function DashboardPage() {
                 onChange={(e) => setSearchEmail(e.target.value)}
                 placeholder="you@domain.com"
                 required
+                autoComplete="off"
                 className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neutral-600"
               />
             </div>
@@ -187,9 +191,30 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-6">
             
-            {/* Step 2: Edit Profile Information */}
-            <form onSubmit={handleSaveProfile} className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+            {/* Edit Profile Information */}
+            <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
               <h2 className="text-lg font-semibold">Profile Details</h2>
+
+              {/* Public Profile Privacy Switch */}
+              <div className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-xl mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-white">Public Profile Status</p>
+                  <p className="text-xs text-neutral-400">
+                    {isActive ? `Your profile is live at /p/${slug}` : 'Your profile is locked and hidden'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsActive(!isActive)}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-emerald-950 border border-emerald-800 text-emerald-400'
+                      : 'bg-red-950 border border-red-800 text-red-400'
+                  }`}
+                >
+                  {isActive ? 'ACTIVE' : 'PRIVATE'}
+                </button>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -200,6 +225,7 @@ export default function DashboardPage() {
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    autoComplete="off"
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
                   />
                 </div>
@@ -211,6 +237,7 @@ export default function DashboardPage() {
                     type="text"
                     value={slug}
                     onChange={(e) => setSlug(e.target.value)}
+                    autoComplete="off"
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
                   />
                 </div>
@@ -222,6 +249,7 @@ export default function DashboardPage() {
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    autoComplete="off"
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
                   />
                 </div>
@@ -233,6 +261,7 @@ export default function DashboardPage() {
                     type="text"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
+                    autoComplete="off"
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
                   />
                 </div>
@@ -244,6 +273,7 @@ export default function DashboardPage() {
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="off"
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
                   />
                 </div>
@@ -255,6 +285,7 @@ export default function DashboardPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="off"
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
                   />
                 </div>
@@ -281,17 +312,17 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            {/* Step 3: Link Tree & Payment QR Management */}
+            {/* Link Tree & Payment QR Management */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
               <h2 className="text-lg font-semibold">Manage Profile Links & QRs</h2>
 
-              {/* Add New Link */}
-              <form onSubmit={handleAddLink} className="grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-neutral-800 pb-4">
+              <form onSubmit={handleAddLink} autoComplete="off" className="grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-neutral-800 pb-4">
                 <input
                   type="text"
                   placeholder="Title (e.g. GCash QR)"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
+                  autoComplete="off"
                   className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
                 />
                 <input
@@ -299,6 +330,7 @@ export default function DashboardPage() {
                   placeholder="URL / Image Link"
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
+                  autoComplete="off"
                   className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
                 />
                 <div className="flex gap-2">
@@ -319,7 +351,6 @@ export default function DashboardPage() {
                 </div>
               </form>
 
-              {/* Active Links List */}
               <div className="space-y-2">
                 {links.map((item) => (
                   <div
