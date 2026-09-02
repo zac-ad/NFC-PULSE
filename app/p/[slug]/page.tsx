@@ -49,6 +49,17 @@ export default function ProfilePage({ params }: PageProps) {
     loadProfileData();
   }, [targetSlug]);
 
+  // Helper to retrieve brand logo automatically from link domain
+  const getFaviconUrl = (urlStr: string) => {
+    try {
+      const formattedUrl = urlStr.startsWith('http') ? urlStr : `https://${urlStr}`;
+      const domain = new URL(formattedUrl).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    } catch {
+      return null;
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[#edf2f7] flex items-center justify-center p-4">
@@ -197,7 +208,7 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Links Section */}
+        {/* Links Section with Automatic Domain Icons */}
         <div className="space-y-3 pt-2">
           <div className="inline-block px-3 py-1 bg-[#dbe4ed] text-slate-600 text-xs font-semibold rounded-lg">
             Links
@@ -205,27 +216,43 @@ export default function ProfilePage({ params }: PageProps) {
 
           <div className="space-y-2.5">
             {links.length > 0 ? (
-              links.map((link) => (
-                <a
-                  key={link.id}
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between p-4 bg-[#e2eaf2] hover:bg-[#d8e3ef] text-slate-800 rounded-2xl transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-bold text-xs">
-                      {link.title.charAt(0)}
-                    </span>
-                    <span className="text-sm font-semibold text-slate-800">
-                      {link.title}
-                    </span>
-                  </div>
-                  <svg className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                  </svg>
-                </a>
-              ))
+              links.map((link) => {
+                const logoUrl = getFaviconUrl(link.url);
+                return (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-4 bg-[#e2eaf2] hover:bg-[#d8e3ef] text-slate-800 rounded-2xl transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-xs shrink-0 overflow-hidden">
+                        {logoUrl ? (
+                          <img
+                            src={logoUrl}
+                            alt={link.title}
+                            className="w-5 h-5 object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-slate-700 font-bold text-xs">
+                            {link.title.charAt(0)}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-slate-800">
+                        {link.title}
+                      </span>
+                    </div>
+                    <svg className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                );
+              })
             ) : (
               <div className="p-4 bg-[#e2eaf2] rounded-2xl text-center text-slate-400 text-xs">
                 No links added yet.
