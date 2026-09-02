@@ -1,15 +1,31 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
-// Disable Next.js route caching so dashboard updates display instantly
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function ProfilePage({ params }: { params: { slug: string } }) {
+interface PageProps {
+  params: Promise<{ slug: string }> | { slug: string };
+}
+
+export default async function ProfilePage({ params }: PageProps) {
+  // Await params for Next.js async compatibility
+  const resolvedParams = await params;
+  const targetSlug = resolvedParams.slug?.trim();
+
+  if (!targetSlug) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+        <p className="text-neutral-400">Invalid profile URL.</p>
+      </main>
+    );
+  }
+
+  // Fetch profile with case-insensitive slug matching
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('slug', params.slug)
+    .ilike('slug', targetSlug)
     .single();
 
   if (!profile) {
@@ -50,7 +66,7 @@ export default async function ProfilePage({ params }: { params: { slug: string }
     .eq('profile_id', profile.id)
     .order('position', { ascending: true });
 
-  // Format full vCard data string
+  // Format vCard payload
   const vcardData = `BEGIN:VCARD%0AVERSION:3.0%0AN:${encodeURIComponent(profile.full_name || '')}%0AORG:${encodeURIComponent(profile.company || '')}%0ATITLE:${encodeURIComponent(profile.title || '')}%0ATEL:${encodeURIComponent(profile.phone || '')}%0AEMAIL:${encodeURIComponent(profile.email || '')}%0AEND:VCARD`;
 
   return (
