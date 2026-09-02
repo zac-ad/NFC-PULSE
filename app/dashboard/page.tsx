@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
 
   const [searchEmail, setSearchEmail] = useState('');
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -31,19 +32,25 @@ export default function DashboardPage() {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
-  // Links State
-  const [links, setLinks] = useState<LinkItem[]>([]);
-  const [newTitle, setNewTitle] = useState('');
-  const [newUrl, setNewUrl] = useState('');
-  const [newType, setNewType] = useState<'link' | 'qr'>('link');
+  // Items State
+  const [items, setItems] = useState<LinkItem[]>([]);
+
+  // Form Inputs for Links
+  const [linkTitle, setLinkTitle] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+
+  // Form Inputs for QRs
+  const [qrTitle, setQrTitle] = useState('');
+  const [qrImageUrl, setQrImageUrl] = useState('');
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Helper to upload image files to Supabase Storage
-  const handleFileUpload = async (file: File, type: 'avatar' | 'banner') => {
+  // Helper to upload images to Supabase Storage
+  const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
     try {
       if (type === 'avatar') setUploadingAvatar(true);
       if (type === 'banner') setUploadingBanner(true);
+      if (type === 'qr') setUploadingQr(true);
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${profileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
@@ -60,13 +67,15 @@ export default function DashboardPage() {
 
       if (type === 'avatar') setAvatarUrl(data.publicUrl);
       if (type === 'banner') setBannerUrl(data.publicUrl);
+      if (type === 'qr') setQrImageUrl(data.publicUrl);
 
-      setMessage({ type: 'success', text: `${type === 'avatar' ? 'Profile photo' : 'Banner'} uploaded successfully!` });
+      setMessage({ type: 'success', text: 'File uploaded successfully!' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Image upload failed.' });
     } finally {
       setUploadingAvatar(false);
       setUploadingBanner(false);
+      setUploadingQr(false);
     }
   };
 
@@ -100,13 +109,13 @@ export default function DashboardPage() {
     setBannerUrl(profile.banner_url || '');
     setIsActive(profile.is_active ?? true);
 
-    const { data: profileLinks } = await supabase
+    const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
       .eq('profile_id', profile.id)
       .order('position', { ascending: true });
 
-    setLinks(profileLinks || []);
+    setItems(profileItems || []);
     setLoading(false);
   };
 
@@ -142,16 +151,17 @@ export default function DashboardPage() {
     setSaving(false);
   };
 
+  // Add Link item
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profileId || !newTitle || !newUrl) return;
+    if (!profileId || !linkTitle || !linkUrl) return;
 
     const newLinkItem = {
       profile_id: profileId,
-      title: newTitle,
-      url: newUrl,
-      type: newType,
-      position: links.length + 1,
+      title: linkTitle,
+      url: linkUrl,
+      type: 'link',
+      position: items.length + 1,
     };
 
     const { data, error } = await supabase
@@ -161,19 +171,48 @@ export default function DashboardPage() {
       .single();
 
     if (!error && data) {
-      setLinks([...links, data]);
-      setNewTitle('');
-      setNewUrl('');
+      setItems([...items, data]);
+      setLinkTitle('');
+      setLinkUrl('');
     }
   };
 
-  const handleDeleteLink = async (id?: string) => {
+  // Add QR Code item
+  const handleAddQr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileId || !qrTitle || !qrImageUrl) return;
+
+    const newQrItem = {
+      profile_id: profileId,
+      title: qrTitle,
+      url: qrImageUrl,
+      type: 'qr',
+      position: items.length + 1,
+    };
+
+    const { data, error } = await supabase
+      .from('profile_links')
+      .insert(newQrItem)
+      .select()
+      .single();
+
+    if (!error && data) {
+      setItems([...items, data]);
+      setQrTitle('');
+      setQrImageUrl('');
+    }
+  };
+
+  const handleDeleteItem = async (id?: string) => {
     if (!id) return;
     const { error } = await supabase.from('profile_links').delete().eq('id', id);
     if (!error) {
-      setLinks(links.filter((l) => l.id !== id));
+      setItems(items.filter((l) => l.id !== id));
     }
   };
+
+  const socialLinks = items.filter((i) => i.type !== 'qr');
+  const qrCodes = items.filter((i) => i.type === 'qr');
 
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center">
@@ -253,10 +292,8 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Native Media Upload Controls */}
+              {/* Media Upload Controls */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-neutral-900">
-                
-                {/* Profile Photo Upload */}
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
                     Profile Photo
@@ -270,16 +307,14 @@ export default function DashboardPage() {
                     disabled={uploadingAvatar}
                     className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
                   />
-                  {uploadingAvatar && <p className="text-xs text-neutral-400 animate-pulse">Uploading photo...</p>}
                   {avatarUrl && (
                     <div className="flex items-center gap-3 pt-1">
-                      <img src={avatarUrl} alt="Avatar Preview" className="w-12 h-12 rounded-full object-cover border border-neutral-700" />
+                      <img src={avatarUrl} alt="Avatar Preview" className="w-10 h-10 rounded-full object-cover border border-neutral-700" />
                       <span className="text-xs text-emerald-400 font-medium">Photo Attached</span>
                     </div>
                   )}
                 </div>
 
-                {/* Banner Image Upload */}
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
                     Background Banner
@@ -293,15 +328,13 @@ export default function DashboardPage() {
                     disabled={uploadingBanner}
                     className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
                   />
-                  {uploadingBanner && <p className="text-xs text-neutral-400 animate-pulse">Uploading banner...</p>}
                   {bannerUrl && (
                     <div className="flex items-center gap-3 pt-1">
-                      <img src={bannerUrl} alt="Banner Preview" className="w-16 h-10 rounded-lg object-cover border border-neutral-700" />
+                      <img src={bannerUrl} alt="Banner Preview" className="w-14 h-9 rounded-lg object-cover border border-neutral-700" />
                       <span className="text-xs text-emerald-400 font-medium">Banner Attached</span>
                     </div>
                   )}
                 </div>
-
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -400,68 +433,131 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            {/* Link Tree & Payment QR Management */}
+            {/* 1. Manage Social / Profile Links */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Manage Profile Links & QRs</h2>
+              <h2 className="text-lg font-semibold">Manage Profile Links</h2>
 
-              <form onSubmit={handleAddLink} autoComplete="off" className="grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-neutral-800 pb-4">
+              <form onSubmit={handleAddLink} autoComplete="off" className="flex flex-col md:flex-row gap-3 border-b border-neutral-800 pb-4">
                 <input
                   type="text"
-                  placeholder="Title (e.g. GCash QR)"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Title (e.g. Facebook)"
+                  value={linkTitle}
+                  onChange={(e) => setLinkTitle(e.target.value)}
                   autoComplete="off"
-                  className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
+                  className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
                 />
                 <input
                   type="text"
-                  placeholder="URL / Image Link"
-                  value={newUrl}
-                  onChange={(e) => setNewUrl(e.target.value)}
+                  placeholder="URL (e.g. https://facebook.com/...)"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
                   autoComplete="off"
-                  className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
+                  className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
                 />
-                <div className="flex gap-2">
-                  <select
-                    value={newType}
-                    onChange={(e) => setNewType(e.target.value as 'link' | 'qr')}
-                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-2 py-2 text-sm text-white"
-                  >
-                    <option value="link">URL</option>
-                    <option value="qr">QR Modal</option>
-                  </select>
+                <button
+                  type="submit"
+                  className="bg-white hover:bg-neutral-200 text-black text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
+                >
+                  Add Link
+                </button>
+              </form>
+
+              <div className="space-y-2">
+                {socialLinks.length > 0 ? (
+                  socialLinks.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
+                    >
+                      <div>
+                        <p className="font-medium">{item.title}</p>
+                        <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-neutral-500 text-center py-2">No links added yet.</p>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Manage Payment QR Codes */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+              <h2 className="text-lg font-semibold">Manage Payment QR Codes</h2>
+
+              <form onSubmit={handleAddQr} autoComplete="off" className="space-y-3 border-b border-neutral-800 pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    placeholder="QR Title (e.g. GCash QR)"
+                    value={qrTitle}
+                    onChange={(e) => setQrTitle(e.target.value)}
+                    autoComplete="off"
+                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
+                  />
+                  <div className="space-y-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'qr');
+                      }}
+                      disabled={uploadingQr}
+                      className="block w-full text-xs text-neutral-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Or paste QR Image URL directly..."
+                    value={qrImageUrl}
+                    onChange={(e) => setQrImageUrl(e.target.value)}
+                    autoComplete="off"
+                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
+                  />
                   <button
                     type="submit"
-                    className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white text-sm font-medium rounded-xl transition-colors"
+                    disabled={!qrTitle || !qrImageUrl}
+                    className="bg-white hover:bg-neutral-200 text-black text-sm font-semibold px-5 py-2 rounded-xl transition-colors disabled:opacity-40"
                   >
-                    Add
+                    Add QR Code
                   </button>
                 </div>
               </form>
 
               <div className="space-y-2">
-                {links.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
-                  >
-                    <div>
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs bg-neutral-800 text-neutral-400 px-2 py-1 rounded">
-                        {item.type}
-                      </span>
+                {qrCodes.length > 0 ? (
+                  qrCodes.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img src={item.url} alt={item.title} className="w-10 h-10 object-cover rounded-lg border border-neutral-700 bg-white" />
+                        <div>
+                          <p className="font-medium">{item.title}</p>
+                          <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
+                        </div>
+                      </div>
                       <button
-                        onClick={() => handleDeleteLink(item.id)}
-                        className="text-red-400 hover:text-red-300 text-xs font-semibold"
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1"
                       >
                         Delete
                       </button>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-xs text-neutral-500 text-center py-2">No QR codes added yet.</p>
+                )}
               </div>
             </div>
 

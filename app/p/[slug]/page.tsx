@@ -96,7 +96,7 @@ export default function ProfilePage({ params }: PageProps) {
     <main className="min-h-screen bg-[#edf2f7] text-slate-900 flex justify-center py-6 px-4 font-sans">
       <div className="w-full max-w-sm space-y-5">
         
-        {/* Top Banner & Avatar Header */}
+        {/* Banner & Avatar */}
         <div className="relative">
           <div className="w-full h-44 bg-[#181a1d] rounded-3xl overflow-hidden shadow-sm">
             {profile.banner_url ? (
@@ -127,7 +127,7 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Profile Info & Action Icons */}
+        {/* Info & Contact Actions */}
         <div className="pt-12 text-center space-y-4">
           <div className="flex items-center justify-center gap-1.5">
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
@@ -138,7 +138,6 @@ export default function ProfilePage({ params }: PageProps) {
             </svg>
           </div>
 
-          {/* Quick Contact Buttons */}
           <div className="flex items-center justify-center gap-3">
             <a
               href={`tel:${profile.phone || ''}`}
@@ -169,7 +168,6 @@ export default function ProfilePage({ params }: PageProps) {
             </a>
           </div>
 
-          {/* Save Contact Bar */}
           <div className="flex items-center gap-2 pt-1">
             <a
               href={`data:text/vcard;charset=utf-8,${vcardData}`}
@@ -230,7 +228,7 @@ export default function ProfilePage({ params }: PageProps) {
               ))
             ) : (
               <div className="p-4 bg-[#e2eaf2] rounded-2xl text-center text-slate-400 text-xs">
-                No social links added yet.
+                No links added yet.
               </div>
             )}
           </div>
@@ -264,33 +262,15 @@ export default function ProfilePage({ params }: PageProps) {
                         <div className="bg-white p-3 rounded-2xl border border-slate-200 inline-block mb-2">
                           <img src={qr.url} alt={qr.title} className="w-48 h-48 object-contain rounded-lg" />
                         </div>
-                        <p className="text-xs text-slate-500">Scan code to send payment</p>
+                        <p className="text-xs text-slate-500">Scan code to pay</p>
                       </div>
                     )}
                   </div>
                 );
               })
             ) : (
-              <div className="bg-[#e2eaf2] rounded-2xl overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => setExpandedQrId(expandedQrId === 'default' ? null : 'default')}
-                  className="w-full flex items-center justify-between p-4 text-left font-semibold text-slate-800 text-sm"
-                >
-                  <span>GCASH QR</span>
-                  <svg className={`w-4 h-4 text-slate-500 transition-transform ${expandedQrId === 'default' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {expandedQrId === 'default' && (
-                  <div className="px-4 pb-5 text-center flex flex-col items-center">
-                    <div className="bg-white p-3 rounded-2xl border border-slate-200 inline-block mb-2">
-                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=GCash-${profile.phone || 'PULSE'}`} alt="GCash QR" className="w-48 h-48 object-contain rounded-lg" />
-                    </div>
-                    <p className="text-xs text-slate-500">Scan code to pay via GCash</p>
-                  </div>
-                )}
+              <div className="p-4 bg-[#e2eaf2] rounded-2xl text-center text-slate-400 text-xs">
+                No payment QR codes added yet.
               </div>
             )}
           </div>
