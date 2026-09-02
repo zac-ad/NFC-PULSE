@@ -14,27 +14,53 @@ interface HardwareCard {
   } | null;
 }
 
+interface SystemTapLog {
+  id: string;
+  created_at: string;
+  hardware_cards?: { card_code: string } | null;
+  profiles?: { full_name: string; email: string } | null;
+}
+
 export default function AdminFleetCommand() {
   const [cards, setCards] = useState<HardwareCard[]>([]);
   const [newCardCode, setNewCardCode] = useState('');
   const [loading, setLoading] = useState(true);
+  const [totalSystemTaps, setTotalSystemTaps] = useState<number>(0);
+  const [recentTapStream, setRecentTapStream] = useState<SystemTapLog[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const fetchCards = async () => {
+  const fetchCardsAndTelemetry = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+
+    // Fetch Cards Inventory
+    const { data: cardsData } = await supabase
       .from('hardware_cards')
       .select('*, profiles(full_name, email)')
       .order('card_code', { ascending: true });
 
-    if (!error && data) {
-      setCards(data);
-    }
+    if (cardsData) setCards(cardsData);
+
+    // Fetch System Tap Telemetry Count
+    const { count: tapCount } = await supabase
+      .from('card_taps')
+      .select('*', { count: 'exact' });
+
+    setTotalSystemTaps(tapCount || 0);
+
+    // Fetch Live Tap Log Stream
+    const { data: tapLogs } = await supabase
+      .from('card_taps')
+      .select('id, created_at, hardware_cards(card_code), profiles(full_name, email)')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (tapLogs) setRecentTapStream(tapLogs as any[]);
+
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchCards();
+    fetchCardsAndTelemetry();
   }, []);
 
   const handleAddCard = async (e: React.FormEvent) => {
@@ -53,7 +79,7 @@ export default function AdminFleetCommand() {
     } else {
       setMessage({ type: 'success', text: `Card ${formattedCode} provisioned successfully!` });
       setNewCardCode('');
-      fetchCards();
+      fetchCardsAndTelemetry();
     }
   };
 
@@ -67,7 +93,7 @@ export default function AdminFleetCommand() {
     if (error) {
       setMessage({ type: 'error', text: 'Failed to update card status.' });
     } else {
-      fetchCards();
+      fetchCardsAndTelemetry();
     }
   };
 
@@ -86,7 +112,7 @@ export default function AdminFleetCommand() {
       setMessage({ type: 'error', text: 'Failed to unclaim card.' });
     } else {
       setMessage({ type: 'success', text: `Card ${cardCode} is now UNCLAIMED and ready for activation.` });
-      fetchCards();
+      fetchCardsAndTelemetry();
     }
   };
 
@@ -102,9 +128,9 @@ export default function AdminFleetCommand() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-neutral-800 pb-5 gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Fleet Command</h1>
-            <p className="text-sm text-neutral-400">PULSE Hardware Provisioning & Telemetry Analytics</p>
+            <p className="text-sm text-neutral-400">PULSE Hardware Provisioning & Global Telemetry</p>
           </div>
-          <div className="flex items-center gap-3 bg-neutral-950 border border-neutral-800 rounded-2xl p-2 px-4">
+          <div className="flex items-center gap-3 bg-neutral-950 border border-neutral-800 rounded-2xl p-2 px-4 shadow-xl">
             <div className="text-center px-3 border-r border-neutral-800">
               <p className="text-[10px] text-neutral-500 font-bold uppercase">Total Cards</p>
               <p className="text-lg font-black text-white">{totalCards}</p>
@@ -113,9 +139,13 @@ export default function AdminFleetCommand() {
               <p className="text-[10px] text-neutral-500 font-bold uppercase">Active</p>
               <p className="text-lg font-black text-emerald-400">{activeCards}</p>
             </div>
-            <div className="text-center px-3">
+            <div className="text-center px-3 border-r border-neutral-800">
               <p className="text-[10px] text-neutral-500 font-bold uppercase">Unclaimed</p>
               <p className="text-lg font-black text-amber-400">{unclaimedCards}</p>
+            </div>
+            <div className="text-center px-3">
+              <p className="text-[10px] text-neutral-500 font-bold uppercase">System Taps</p>
+              <p className="text-lg font-black text-sky-400">{totalSystemTaps}</p>
             </div>
           </div>
         </div>
@@ -151,6 +181,38 @@ export default function AdminFleetCommand() {
               Add Hardware Pass
             </button>
           </form>
+        </div>
+
+        {/* Live Tap Event Stream Log */}
+        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
+          <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
+            <h2 className="text-lg font-semibold text-white">Live System Tap Telemetry Stream</h2>
+            <span className="text-[10px] font-mono bg-sky-950 text-sky-400 border border-sky-800 px-2.5 py-1 rounded-full font-bold">
+              REAL-TIME LOGS
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {recentTapStream.length > 0 ? (
+              recentTapStream.map((log) => (
+                <div key={log.id} className="flex items-center justify-between bg-neutral-900/60 border border-neutral-800 px-4 py-3 rounded-xl text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-sky-400 bg-sky-950/80 border border-sky-800/60 px-2 py-0.5 rounded">
+                      {log.hardware_cards?.card_code || 'TAP'}
+                    </span>
+                    <span className="text-neutral-300 font-medium">
+                      {log.profiles?.full_name || 'System User'} ({log.profiles?.email || 'N/A'})
+                    </span>
+                  </div>
+                  <span className="text-neutral-500 font-mono">
+                    {new Date(log.created_at).toLocaleString()}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-neutral-500 text-center py-2">No hardware tap telemetry recorded yet.</p>
+            )}
+          </div>
         </div>
 
         {/* Hardware Inventory Table */}

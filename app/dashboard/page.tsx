@@ -10,6 +10,11 @@ interface LinkItem {
   type: 'link' | 'qr';
 }
 
+interface TapEvent {
+  id: string;
+  created_at: string;
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -32,20 +37,21 @@ export default function DashboardPage() {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
+  // Analytics State
+  const [tapCount, setTapCount] = useState<number>(0);
+  const [recentTaps, setRecentTaps] = useState<TapEvent[]>([]);
+
   // Items State
   const [items, setItems] = useState<LinkItem[]>([]);
 
-  // Form Inputs for Links
+  // Form Inputs for Links & QRs
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
-
-  // Form Inputs for QRs
   const [qrTitle, setQrTitle] = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Helper to upload images to Supabase Storage
   const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
     try {
       if (type === 'avatar') setUploadingAvatar(true);
@@ -79,7 +85,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Fetch profile by email
   const handleFetchProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -109,6 +114,7 @@ export default function DashboardPage() {
     setBannerUrl(profile.banner_url || '');
     setIsActive(profile.is_active ?? true);
 
+    // Fetch Links
     const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
@@ -116,10 +122,20 @@ export default function DashboardPage() {
       .order('position', { ascending: true });
 
     setItems(profileItems || []);
+
+    // Fetch Tap Analytics
+    const { data: tapsData, count } = await supabase
+      .from('card_taps')
+      .select('*', { count: 'exact' })
+      .eq('profile_id', profile.id)
+      .order('created_at', { ascending: false });
+
+    setTapCount(count || 0);
+    setRecentTaps(tapsData?.slice(0, 5) || []);
+
     setLoading(false);
   };
 
-  // Save profile updates
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileId) return;
@@ -151,7 +167,6 @@ export default function DashboardPage() {
     setSaving(false);
   };
 
-  // Add Link item
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileId || !linkTitle || !linkUrl) return;
@@ -177,7 +192,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Add QR Code item
   const handleAddQr = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileId || !qrTitle || !qrImageUrl) return;
@@ -215,14 +229,14 @@ export default function DashboardPage() {
   const qrCodes = items.filter((i) => i.type === 'qr');
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center">
+    <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center font-sans">
       <div className="max-w-2xl w-full space-y-6">
         
         {/* Header */}
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">PULSE Dashboard</h1>
-            <p className="text-sm text-neutral-400">Manage your live NFC profile & branding</p>
+            <p className="text-sm text-neutral-400">Manage your live NFC profile & telemetry</p>
           </div>
         </div>
 
@@ -240,7 +254,7 @@ export default function DashboardPage() {
 
         {/* Profile Lookup */}
         {!profileId ? (
-          <form onSubmit={handleFetchProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+          <form onSubmit={handleFetchProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
             <h2 className="text-lg font-semibold">Access Your Dashboard</h2>
             <div>
               <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
@@ -267,11 +281,49 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-6">
             
-            {/* Edit Profile Information */}
-            <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+            {/* Analytics Telemetry Section */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
+                <h2 className="text-lg font-semibold">Tap Analytics</h2>
+                <span className="text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
+                  LIVE TELEMETRY
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                  <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Total Physical Taps</p>
+                  <p className="text-3xl font-black text-white mt-1">{tapCount}</p>
+                </div>
+                <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                  <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Latest Tap Event</p>
+                  <p className="text-sm font-semibold text-neutral-200 mt-2">
+                    {recentTaps.length > 0
+                      ? new Date(recentTaps[0].created_at).toLocaleString()
+                      : 'No tap events recorded yet'}
+                  </p>
+                </div>
+              </div>
+
+              {recentTaps.length > 0 && (
+                <div className="pt-2">
+                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Recent Physical Interactions</p>
+                  <div className="space-y-1.5">
+                    {recentTaps.map((tap) => (
+                      <div key={tap.id} className="flex justify-between items-center bg-neutral-900/50 border border-neutral-800/80 px-3 py-2 rounded-lg text-xs">
+                        <span className="text-neutral-300 font-mono">⚡ Hardware NFC Tap</span>
+                        <span className="text-neutral-500">{new Date(tap.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Customization Form */}
+            <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-lg font-semibold">Profile Customization</h2>
 
-              {/* Public Profile Privacy Switch */}
               <div className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-xl mb-4">
                 <div>
                   <p className="text-sm font-semibold text-white">Public Profile Status</p>
@@ -292,7 +344,6 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Media Upload Controls */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-neutral-900">
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
@@ -433,8 +484,8 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            {/* 1. Manage Social / Profile Links */}
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+            {/* Links & Payment QRs */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-lg font-semibold">Manage Profile Links</h2>
 
               <form onSubmit={handleAddLink} autoComplete="off" className="flex flex-col md:flex-row gap-3 border-b border-neutral-800 pb-4">
@@ -487,8 +538,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 2. Manage Payment QR Codes */}
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-lg font-semibold">Manage Payment QR Codes</h2>
 
               <form onSubmit={handleAddQr} autoComplete="off" className="space-y-3 border-b border-neutral-800 pb-4">
@@ -501,17 +551,15 @@ export default function DashboardPage() {
                     autoComplete="off"
                     className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
                   />
-                  <div className="space-y-1">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'qr');
-                      }}
-                      disabled={uploadingQr}
-                      className="block w-full text-xs text-neutral-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
-                    />
-                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'qr');
+                    }}
+                    disabled={uploadingQr}
+                    className="block w-full text-xs text-neutral-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
+                  />
                 </div>
 
                 <div className="flex items-center gap-3">
