@@ -49,7 +49,6 @@ export default function ProfilePage({ params }: PageProps) {
     loadProfileData();
   }, [targetSlug]);
 
-  // Helper to retrieve brand logo automatically from link domain
   const getFaviconUrl = (urlStr: string) => {
     try {
       const formattedUrl = urlStr.startsWith('http') ? urlStr : `https://${urlStr}`;
@@ -62,18 +61,18 @@ export default function ProfilePage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#edf2f7] flex items-center justify-center p-4">
-        <p className="text-slate-500 font-medium text-sm animate-pulse">Loading profile...</p>
+      <main className="min-h-screen bg-black flex items-center justify-center p-4">
+        <p className="text-neutral-500 font-medium text-sm animate-pulse">Loading profile...</p>
       </main>
     );
   }
 
   if (!profile) {
     return (
-      <main className="min-h-screen bg-[#edf2f7] flex items-center justify-center p-4">
+      <main className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="text-slate-600 font-semibold mb-2">Profile not found.</p>
-          <Link href="/" className="text-xs text-slate-500 underline">Return Home</Link>
+          <p className="text-neutral-400 font-semibold mb-2">Profile not found.</p>
+          <Link href="/" className="text-xs text-neutral-500 underline">Return Home</Link>
         </div>
       </main>
     );
@@ -81,18 +80,18 @@ export default function ProfilePage({ params }: PageProps) {
 
   if (profile.is_active === false) {
     return (
-      <main className="min-h-screen bg-[#edf2f7] flex items-center justify-center p-4">
-        <div className="max-w-sm w-full bg-white rounded-3xl p-8 text-center shadow-lg border border-slate-100">
-          <div className="w-12 h-12 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+      <main className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="max-w-sm w-full bg-neutral-950 rounded-3xl p-8 text-center border border-neutral-800 shadow-2xl">
+          <div className="w-12 h-12 bg-neutral-900 text-neutral-400 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
             🔒
           </div>
-          <h1 className="text-lg font-bold text-slate-800 mb-2">Profile Private</h1>
-          <p className="text-slate-500 text-xs leading-relaxed mb-6">
-            This digital card has been set to private by the owner.
+          <h1 className="text-lg font-bold text-white mb-2">Profile Private</h1>
+          <p className="text-neutral-400 text-xs leading-relaxed mb-6">
+            This digital business card has been temporarily locked by the owner.
           </p>
           <Link
             href="/"
-            className="inline-block w-full py-3 bg-slate-900 text-xs text-white rounded-2xl font-medium shadow-sm hover:bg-slate-800 transition-colors"
+            className="inline-block w-full py-3 bg-white text-black text-xs font-semibold rounded-2xl hover:bg-neutral-200 transition-colors"
           >
             Return Home
           </Link>
@@ -104,12 +103,12 @@ export default function ProfilePage({ params }: PageProps) {
   const vcardData = `BEGIN:VCARD%0AVERSION:3.0%0AN:${encodeURIComponent(profile.full_name || '')}%0AORG:${encodeURIComponent(profile.company || '')}%0ATITLE:${encodeURIComponent(profile.title || '')}%0ATEL:${encodeURIComponent(profile.phone || '')}%0AEMAIL:${encodeURIComponent(profile.email || '')}%0AEND:VCARD`;
 
   return (
-    <main className="min-h-screen bg-[#edf2f7] text-slate-900 flex justify-center py-6 px-4 font-sans">
+    <main className="min-h-screen bg-black text-white flex justify-center py-6 px-4 font-sans selection:bg-neutral-800">
       <div className="w-full max-w-sm space-y-5">
         
-        {/* Banner & Avatar */}
+        {/* Banner & Avatar Container */}
         <div className="relative">
-          <div className="w-full h-44 bg-[#181a1d] rounded-3xl overflow-hidden shadow-sm">
+          <div className="w-full h-44 bg-neutral-900 border border-neutral-800/80 rounded-3xl overflow-hidden shadow-2xl">
             {profile.banner_url ? (
               <img
                 src={profile.banner_url}
@@ -117,14 +116,14 @@ export default function ProfilePage({ params }: PageProps) {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-600 font-bold text-3xl opacity-30">
+              <div className="w-full h-full flex items-center justify-center text-neutral-700 font-black text-3xl tracking-widest uppercase">
                 {profile.company || 'PULSE'}
               </div>
             )}
           </div>
 
           <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
-            <div className="w-28 h-28 rounded-full border-4 border-[#edf2f7] bg-slate-800 overflow-hidden shadow-md flex items-center justify-center text-white text-3xl font-bold">
+            <div className="w-28 h-28 rounded-full border-4 border-black bg-neutral-900 overflow-hidden shadow-2xl flex items-center justify-center text-white text-3xl font-bold">
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
@@ -138,21 +137,28 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Info & Contact Actions */}
+        {/* Profile Info & Quick Actions */}
         <div className="pt-12 text-center space-y-4">
           <div className="flex items-center justify-center gap-1.5">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-xl font-bold tracking-tight text-white">
               {profile.full_name}
             </h1>
-            <svg className="w-5 h-5 text-sky-500 fill-current" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-sky-400 fill-current" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
           </div>
 
+          {(profile.title || profile.company) && (
+            <p className="text-xs text-neutral-400 font-medium -mt-2">
+              {profile.title} {profile.company && `at ${profile.company}`}
+            </p>
+          )}
+
+          {/* Contact Action Buttons */}
           <div className="flex items-center justify-center gap-3">
             <a
               href={`tel:${profile.phone || ''}`}
-              className="w-11 h-11 bg-[#1c1f23] text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-colors shadow-sm"
+              className="w-11 h-11 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
               title="Call Phone"
             >
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -161,7 +167,7 @@ export default function ProfilePage({ params }: PageProps) {
             </a>
             <a
               href={`sms:${profile.phone || ''}`}
-              className="w-11 h-11 bg-[#1c1f23] text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-colors shadow-sm"
+              className="w-11 h-11 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
               title="Send Message"
             >
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -170,7 +176,7 @@ export default function ProfilePage({ params }: PageProps) {
             </a>
             <a
               href={`mailto:${profile.email || ''}`}
-              className="w-11 h-11 bg-[#1c1f23] text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-colors shadow-sm"
+              className="w-11 h-11 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
               title="Send Email"
             >
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -179,11 +185,12 @@ export default function ProfilePage({ params }: PageProps) {
             </a>
           </div>
 
+          {/* Save Contact Primary CTA */}
           <div className="flex items-center gap-2 pt-1">
             <a
               href={`data:text/vcard;charset=utf-8,${vcardData}`}
               download={`${profile.slug}.vcf`}
-              className="flex-1 py-3.5 bg-[#1c1f23] text-white font-semibold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-sm hover:bg-slate-800 transition-colors"
+              className="flex-1 py-3.5 bg-white text-black font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:bg-neutral-200 transition-all"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
@@ -199,7 +206,7 @@ export default function ProfilePage({ params }: PageProps) {
                   alert('Link copied to clipboard!');
                 }
               }}
-              className="w-12 h-12 bg-[#1c1f23] text-white rounded-2xl flex items-center justify-center hover:bg-slate-800 transition-colors shadow-sm"
+              className="w-12 h-12 bg-neutral-900 border border-neutral-800 text-white rounded-2xl flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
             >
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                 <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" />
@@ -208,9 +215,9 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Links Section with Automatic Domain Icons */}
+        {/* Profile Links Section */}
         <div className="space-y-3 pt-2">
-          <div className="inline-block px-3 py-1 bg-[#dbe4ed] text-slate-600 text-xs font-semibold rounded-lg">
+          <div className="inline-block px-3 py-1 bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold rounded-lg">
             Links
           </div>
 
@@ -224,10 +231,10 @@ export default function ProfilePage({ params }: PageProps) {
                     href={link.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-between p-4 bg-[#e2eaf2] hover:bg-[#d8e3ef] text-slate-800 rounded-2xl transition-all group"
+                    className="flex items-center justify-between p-4 bg-neutral-950/80 hover:bg-neutral-900 border border-neutral-800 text-white rounded-2xl transition-all group shadow-sm"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-xs shrink-0 overflow-hidden">
+                      <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0 overflow-hidden">
                         {logoUrl ? (
                           <img
                             src={logoUrl}
@@ -238,23 +245,23 @@ export default function ProfilePage({ params }: PageProps) {
                             }}
                           />
                         ) : (
-                          <span className="text-slate-700 font-bold text-xs">
+                          <span className="text-neutral-400 font-bold text-xs">
                             {link.title.charAt(0)}
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-semibold text-slate-800">
+                      <span className="text-sm font-semibold text-white">
                         {link.title}
                       </span>
                     </div>
-                    <svg className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                     </svg>
                   </a>
                 );
               })
             ) : (
-              <div className="p-4 bg-[#e2eaf2] rounded-2xl text-center text-slate-400 text-xs">
+              <div className="p-4 bg-neutral-950/50 border border-neutral-800/60 rounded-2xl text-center text-neutral-500 text-xs">
                 No links added yet.
               </div>
             )}
@@ -263,7 +270,7 @@ export default function ProfilePage({ params }: PageProps) {
 
         {/* QR Codes Section */}
         <div className="space-y-3 pt-2">
-          <div className="inline-block px-3 py-1 bg-[#dbe4ed] text-slate-600 text-xs font-semibold rounded-lg">
+          <div className="inline-block px-3 py-1 bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold rounded-lg">
             QR Codes
           </div>
 
@@ -272,31 +279,31 @@ export default function ProfilePage({ params }: PageProps) {
               qrLinks.map((qr) => {
                 const isExpanded = expandedQrId === qr.id;
                 return (
-                  <div key={qr.id} className="bg-[#e2eaf2] rounded-2xl overflow-hidden transition-all">
+                  <div key={qr.id} className="bg-neutral-950/80 border border-neutral-800 rounded-2xl overflow-hidden transition-all shadow-sm">
                     <button
                       type="button"
                       onClick={() => setExpandedQrId(isExpanded ? null : qr.id)}
-                      className="w-full flex items-center justify-between p-4 text-left font-semibold text-slate-800 text-sm"
+                      className="w-full flex items-center justify-between p-4 text-left font-semibold text-white text-sm"
                     >
                       <span>{qr.title}</span>
-                      <svg className={`w-4 h-4 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-neutral-500 transition-transform ${isExpanded ? 'rotate-180 text-white' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
 
                     {isExpanded && (
                       <div className="px-4 pb-5 text-center flex flex-col items-center">
-                        <div className="bg-white p-3 rounded-2xl border border-slate-200 inline-block mb-2">
+                        <div className="bg-white p-3 rounded-2xl border border-neutral-800 inline-block mb-2 shadow-inner">
                           <img src={qr.url} alt={qr.title} className="w-48 h-48 object-contain rounded-lg" />
                         </div>
-                        <p className="text-xs text-slate-500">Scan code to pay</p>
+                        <p className="text-xs text-neutral-400">Scan code to send payment</p>
                       </div>
                     )}
                   </div>
                 );
               })
             ) : (
-              <div className="p-4 bg-[#e2eaf2] rounded-2xl text-center text-slate-400 text-xs">
+              <div className="p-4 bg-neutral-950/50 border border-neutral-800/60 rounded-2xl text-center text-neutral-500 text-xs">
                 No payment QR codes added yet.
               </div>
             )}
@@ -307,12 +314,12 @@ export default function ProfilePage({ params }: PageProps) {
         <div className="pt-6 pb-4 text-center space-y-3">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-white/80 hover:bg-white text-slate-600 text-xs font-semibold rounded-full border border-slate-200/60 transition-all"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-semibold rounded-full border border-neutral-800 transition-all"
           >
             Get Your Own Card ›
           </Link>
-          <p className="text-[11px] text-slate-400 font-medium tracking-wide">
-            Powered by <span className="font-bold text-slate-500">P U L S E</span>
+          <p className="text-[11px] text-neutral-500 font-medium tracking-wide">
+            Powered by <span className="font-bold text-white tracking-widest">P U L S E</span>
           </p>
         </div>
 
