@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { code: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ code: string }> }
 ) {
-  const { code } = params;
+  const { code } = await params;
 
   // 1. Fetch physical card record & associated profile slug
   const { data: card, error } = await supabase
@@ -45,7 +45,7 @@ export async function GET(
     user_agent: userAgent,
   });
 
-  // 5. Generate dynamic expiring URL session token (valid via timestamp parameter)
+  // 5. Generate dynamic expiring URL session token
   const sessionToken = Buffer.from(`pulse_${Date.now()}_${code}`).toString('base64url');
 
   return NextResponse.redirect(
