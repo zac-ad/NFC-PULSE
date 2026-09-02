@@ -1,6 +1,10 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
+// Disable Next.js route caching so dashboard updates display instantly
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function ProfilePage({ params }: { params: { slug: string } }) {
   const { data: profile } = await supabase
     .from('profiles')
@@ -16,7 +20,7 @@ export default async function ProfilePage({ params }: { params: { slug: string }
     );
   }
 
-  // Check if profile is disabled by the user
+  // Block viewing if profile is set to private
   if (profile.is_active === false) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
@@ -46,6 +50,9 @@ export default async function ProfilePage({ params }: { params: { slug: string }
     .eq('profile_id', profile.id)
     .order('position', { ascending: true });
 
+  // Format full vCard data string
+  const vcardData = `BEGIN:VCARD%0AVERSION:3.0%0AN:${encodeURIComponent(profile.full_name || '')}%0AORG:${encodeURIComponent(profile.company || '')}%0ATITLE:${encodeURIComponent(profile.title || '')}%0ATEL:${encodeURIComponent(profile.phone || '')}%0AEMAIL:${encodeURIComponent(profile.email || '')}%0AEND:VCARD`;
+
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-neutral-950 border border-neutral-800 rounded-2xl p-6 text-center space-y-6">
@@ -54,12 +61,15 @@ export default async function ProfilePage({ params }: { params: { slug: string }
         </div>
         <div>
           <h1 className="text-2xl font-bold">{profile.full_name}</h1>
-          <p className="text-neutral-400 text-sm">{profile.title} {profile.company && `at ${profile.company}`}</p>
+          <p className="text-neutral-400 text-sm">
+            {profile.title} {profile.company && `at ${profile.company}`}
+          </p>
+          {profile.phone && <p className="text-neutral-400 text-xs mt-1">📞 {profile.phone}</p>}
           {profile.bio && <p className="text-neutral-500 text-xs mt-2">{profile.bio}</p>}
         </div>
 
         <a
-          href={`data:text/vcard;charset=utf-8,BEGIN:VCARD%0AVERSION:3.0%0AN:${profile.full_name}%0AEMAIL:${profile.email}%0AEND:VCARD`}
+          href={`data:text/vcard;charset=utf-8,${vcardData}`}
           download={`${profile.slug}.vcf`}
           className="w-full py-3 bg-white text-black font-semibold rounded-xl block hover:bg-neutral-200 transition-colors"
         >
@@ -67,17 +77,21 @@ export default async function ProfilePage({ params }: { params: { slug: string }
         </a>
 
         <div className="space-y-3 pt-4 border-t border-neutral-900">
-          {links?.map((link) => (
-            <a
-              key={link.id}
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block w-full p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
-            >
-              {link.title}
-            </a>
-          ))}
+          {links && links.length > 0 ? (
+            links.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block w-full p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
+              >
+                {link.title}
+              </a>
+            ))
+          ) : (
+            <p className="text-neutral-600 text-xs">No custom links added yet.</p>
+          )}
         </div>
       </div>
     </main>
