@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -9,6 +10,9 @@ interface PageProps {
 }
 
 export default async function TapRouterPage({ params }: PageProps) {
+  // Opt out of route response caching
+  await headers();
+
   const resolvedParams = await params;
   const cardCode = resolvedParams.code?.trim().toUpperCase();
 
@@ -16,7 +20,7 @@ export default async function TapRouterPage({ params }: PageProps) {
     redirect('/card-disabled');
   }
 
-  // Fetch hardware card status & linked profile
+  // Fetch hardware card status
   const { data: card } = await supabase
     .from('hardware_cards')
     .select('*, profiles(*)')
@@ -33,7 +37,7 @@ export default async function TapRouterPage({ params }: PageProps) {
     redirect('/card-disabled');
   }
 
-  // 3. Active Card -> Log Telemetry and Route to Public Profile
+  // 3. Active Card -> Log Telemetry & Route to Public Profile
   if (card.status === 'ACTIVE' && card.profile_id) {
     await supabase.from('card_taps').insert({
       card_id: card.id,
