@@ -13,6 +13,9 @@ interface LinkItem {
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+
   const [searchEmail, setSearchEmail] = useState('');
   const [profileId, setProfileId] = useState<string | null>(null);
 
@@ -35,6 +38,37 @@ export default function DashboardPage() {
   const [newType, setNewType] = useState<'link' | 'qr'>('link');
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Helper to upload image files to Supabase Storage
+  const handleFileUpload = async (file: File, type: 'avatar' | 'banner') => {
+    try {
+      if (type === 'avatar') setUploadingAvatar(true);
+      if (type === 'banner') setUploadingBanner(true);
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${profileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profile-media')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('profile-media')
+        .getPublicUrl(fileName);
+
+      if (type === 'avatar') setAvatarUrl(data.publicUrl);
+      if (type === 'banner') setBannerUrl(data.publicUrl);
+
+      setMessage({ type: 'success', text: `${type === 'avatar' ? 'Profile photo' : 'Banner'} uploaded successfully!` });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Image upload failed.' });
+    } finally {
+      setUploadingAvatar(false);
+      setUploadingBanner(false);
+    }
+  };
 
   // Fetch profile by email
   const handleFetchProfile = async (e: React.FormEvent) => {
@@ -66,7 +100,6 @@ export default function DashboardPage() {
     setBannerUrl(profile.banner_url || '');
     setIsActive(profile.is_active ?? true);
 
-    // Fetch links
     const { data: profileLinks } = await supabase
       .from('profile_links')
       .select('*')
@@ -109,7 +142,6 @@ export default function DashboardPage() {
     setSaving(false);
   };
 
-  // Add new link/QR item
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileId || !newTitle || !newUrl) return;
@@ -135,7 +167,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Delete link item
   const handleDeleteLink = async (id?: string) => {
     if (!id) return;
     const { error } = await supabase.from('profile_links').delete().eq('id', id);
@@ -199,7 +230,7 @@ export default function DashboardPage() {
             
             {/* Edit Profile Information */}
             <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Profile & Image Customization</h2>
+              <h2 className="text-lg font-semibold">Profile Customization</h2>
 
               {/* Public Profile Privacy Switch */}
               <div className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-xl mb-4">
@@ -222,34 +253,55 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Image URL Inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-2 border-b border-neutral-900">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Profile Photo URL
+              {/* Native Media Upload Controls */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-neutral-900">
+                
+                {/* Profile Photo Upload */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Profile Photo
                   </label>
                   <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/photo-..."
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white text-xs"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'avatar');
+                    }}
+                    disabled={uploadingAvatar}
+                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
                   />
+                  {uploadingAvatar && <p className="text-xs text-neutral-400 animate-pulse">Uploading photo...</p>}
+                  {avatarUrl && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <img src={avatarUrl} alt="Avatar Preview" className="w-12 h-12 rounded-full object-cover border border-neutral-700" />
+                      <span className="text-xs text-emerald-400 font-medium">Photo Attached</span>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Background Banner URL
+
+                {/* Banner Image Upload */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Background Banner
                   </label>
                   <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/photo-..."
-                    value={bannerUrl}
-                    onChange={(e) => setBannerUrl(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white text-xs"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'banner');
+                    }}
+                    disabled={uploadingBanner}
+                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
                   />
+                  {uploadingBanner && <p className="text-xs text-neutral-400 animate-pulse">Uploading banner...</p>}
+                  {bannerUrl && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <img src={bannerUrl} alt="Banner Preview" className="w-16 h-10 rounded-lg object-cover border border-neutral-700" />
+                      <span className="text-xs text-emerald-400 font-medium">Banner Attached</span>
+                    </div>
+                  )}
                 </div>
+
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
