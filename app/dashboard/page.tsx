@@ -87,51 +87,66 @@ export default function DashboardPage() {
     setLoading(true);
     setMessage(null);
 
-    // 1. Fetch or Create Account
-    let { data: account } = await supabase
+    const cleanEmail = targetEmail.trim().toLowerCase();
+
+    // 1. Fetch existing account (using maybeSingle to prevent zero-row throw)
+    let { data: account, error: accountFetchError } = await supabase
       .from('accounts')
       .select('*')
-      .eq('email', targetEmail.trim())
-      .single();
+      .eq('email', cleanEmail)
+      .maybeSingle();
 
+    // 2. If no account exists, create one
     if (!account) {
-      const { data: newAccount } = await supabase
+      const { data: newAccount, error: createAccountError } = await supabase
         .from('accounts')
-        .insert({ email: targetEmail.trim() })
+        .upsert({ email: cleanEmail }, { onConflict: 'email' })
         .select()
-        .single();
-      account = newAccount;
-    }
+        .maybeSingle();
 
-    if (!account) {
-      setMessage({ type: 'error', text: 'Unable to resolve account credentials.' });
-      setLoading(false);
-      return;
+      if (createAccountError || !newAccount) {
+        setMessage({
+          type: 'error',
+          text: `Unable to resolve account: ${createAccountError?.message || 'Database error'}`,
+        });
+        setLoading(false);
+        return;
+      }
+      account = newAccount;
     }
 
     setUserAccount(account);
 
-    // 2. Fetch Profiles bound to this Account
+    // 3. Fetch Profiles bound to this Account
     let { data: fetchedProfiles } = await supabase
       .from('profiles')
       .select('*')
-      .eq('account_id', account.id);
+      .or(`account_id.eq.${account.id},email.ilike.${cleanEmail}`);
 
-    // If no profiles exist, create a default PROFESSIONAL profile
-    if (!fetchedProfiles || fetchedProfiles.length === 0) {
-      const { data: defaultProfile } = await supabase
+    // If existing profiles were found without account_id, bind them now
+    if (fetchedProfiles && fetchedProfiles.length > 0) {
+      const unlinkedProfiles = fetchedProfiles.filter((p) => !p.account_id);
+      if (unlinkedProfiles.length > 0) {
+        await supabase
+          .from('profiles')
+          .update({ account_id: account.id })
+          .eq('email', cleanEmail);
+      }
+    } else {
+      // Create a default PROFESSIONAL profile if none exists
+      const { data: defaultProf } = await supabase
         .from('profiles')
         .insert({
           account_id: account.id,
-          email: targetEmail,
-          full_name: 'New User',
-          slug: `user-${Date.now().toString().slice(-4)}`,
+          email: cleanEmail,
+          full_name: 'Isaac Salasiban',
+          slug: `isaac-${Date.now().toString().slice(-4)}`,
           profile_type: 'PROFESSIONAL',
         })
         .select()
         .single();
 
-      fetchedProfiles = defaultProfile ? [defaultProfile] : [];
+      fetchedProfiles = defaultProf ? [defaultProf] : [];
     }
 
     setProfiles(fetchedProfiles);
