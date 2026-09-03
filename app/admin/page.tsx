@@ -22,12 +22,37 @@ interface SystemTapLog {
 }
 
 export default function AdminFleetCommand() {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
   const [cards, setCards] = useState<HardwareCard[]>([]);
   const [newCardCode, setNewCardCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [totalSystemTaps, setTotalSystemTaps] = useState<number>(0);
   const [recentTapStream, setRecentTapStream] = useState<SystemTapLog[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    document.title = 'Fleet Command | PULSE';
+    const savedSession = sessionStorage.getItem('pulse_admin_auth');
+    if (savedSession === 'true') {
+      setIsAdminAuthenticated(true);
+      fetchCardsAndTelemetry();
+    }
+  }, []);
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Default admin pin code: 2026 (or set process.env.NEXT_PUBLIC_ADMIN_PIN)
+    const expectedPin = process.env.NEXT_PUBLIC_ADMIN_PIN || '2026';
+    
+    if (adminPin === expectedPin) {
+      setIsAdminAuthenticated(true);
+      sessionStorage.setItem('pulse_admin_auth', 'true');
+      fetchCardsAndTelemetry();
+    } else {
+      alert('Invalid Fleet Command PIN code.');
+    }
+  };
 
   const fetchCardsAndTelemetry = async () => {
     setLoading(true);
@@ -55,11 +80,6 @@ export default function AdminFleetCommand() {
 
     setLoading(false);
   };
-
-  useEffect(() => {
-    document.title = 'Fleet Command | PULSE';
-    fetchCardsAndTelemetry();
-  }, []);
 
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +133,34 @@ export default function AdminFleetCommand() {
       fetchCardsAndTelemetry();
     }
   };
+
+  if (!isAdminAuthenticated) {
+    return (
+      <main className="min-h-screen bg-black text-white p-4 flex items-center justify-center font-sans">
+        <form onSubmit={handleAdminLogin} className="max-w-sm w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-8 space-y-4 shadow-2xl text-center">
+          <div className="w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-2xl flex items-center justify-center mx-auto text-xl">
+            🔒
+          </div>
+          <h1 className="text-xl font-bold text-white">Fleet Command Access</h1>
+          <p className="text-xs text-neutral-400">Enter Admin Passcode to access hardware fleet control.</p>
+          <input
+            type="password"
+            value={adminPin}
+            onChange={(e) => setAdminPin(e.target.value)}
+            placeholder="Passcode (Default: 2026)"
+            required
+            className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-center text-white tracking-widest focus:outline-none focus:border-neutral-600"
+          />
+          <button
+            type="submit"
+            className="w-full py-3 bg-white text-black font-bold text-xs rounded-xl hover:bg-neutral-200 transition-colors"
+          >
+            Authenticate Fleet Command
+          </button>
+        </form>
+      </main>
+    );
+  }
 
   const totalCards = cards.length;
   const activeCards = cards.filter((c) => c.status === 'ACTIVE').length;

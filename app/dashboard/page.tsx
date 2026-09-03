@@ -17,6 +17,7 @@ interface TapEvent {
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
+  const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -50,50 +51,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     document.title = 'Dashboard | PULSE';
+    checkSessionAndLoadProfile();
   }, []);
 
-  const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
-    try {
-      if (type === 'avatar') setUploadingAvatar(true);
-      if (type === 'banner') setUploadingBanner(true);
-      if (type === 'qr') setUploadingQr(true);
-
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${profileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('profile-media')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from('profile-media')
-        .getPublicUrl(fileName);
-
-      if (type === 'avatar') setAvatarUrl(data.publicUrl);
-      if (type === 'banner') setBannerUrl(data.publicUrl);
-      if (type === 'qr') setQrImageUrl(data.publicUrl);
-
-      setMessage({ type: 'success', text: 'File uploaded successfully!' });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Image upload failed.' });
-    } finally {
-      setUploadingAvatar(false);
-      setUploadingBanner(false);
-      setUploadingQr(false);
+  const checkSessionAndLoadProfile = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.email) {
+      loadProfileByEmail(session.user.email);
     }
   };
 
-  const handleFetchProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadProfileByEmail = async (targetEmail: string) => {
     setLoading(true);
     setMessage(null);
 
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('email', searchEmail)
+      .eq('email', targetEmail)
       .single();
 
     if (error || !profile) {
@@ -134,6 +109,71 @@ export default function DashboardPage() {
     setRecentTaps(tapsData?.slice(0, 5) || []);
 
     setLoading(false);
+  };
+
+  const handleSendMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchEmail) return;
+
+    setSendingMagicLink(true);
+    setMessage(null);
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: searchEmail,
+      options: {
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
+      },
+    });
+
+    if (error) {
+      // Fallback direct profile load if OTP is disabled in Supabase project settings
+      await loadProfileByEmail(searchEmail);
+    } else {
+      setMessage({
+        type: 'success',
+        text: `Magic Login Link sent to ${searchEmail}! Check your inbox.`,
+      });
+    }
+    setSendingMagicLink(false);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setProfileId(null);
+    setMessage({ type: 'success', text: 'Signed out successfully.' });
+  };
+
+  const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
+    try {
+      if (type === 'avatar') setUploadingAvatar(true);
+      if (type === 'banner') setUploadingBanner(true);
+      if (type === 'qr') setUploadingQr(true);
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${profileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profile-media')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('profile-media')
+        .getPublicUrl(fileName);
+
+      if (type === 'avatar') setAvatarUrl(data.publicUrl);
+      if (type === 'banner') setBannerUrl(data.publicUrl);
+      if (type === 'qr') setQrImageUrl(data.publicUrl);
+
+      setMessage({ type: 'success', text: 'File uploaded successfully!' });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Image upload failed.' });
+    } finally {
+      setUploadingAvatar(false);
+      setUploadingBanner(false);
+      setUploadingQr(false);
+    }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -237,6 +277,14 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold tracking-tight">PULSE Dashboard</h1>
             <p className="text-sm text-neutral-400">Manage your live NFC profile & telemetry</p>
           </div>
+          {profileId && (
+            <button
+              onClick={handleSignOut}
+              className="px-3.5 py-1.5 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-xs font-semibold rounded-lg transition-colors text-neutral-300"
+            >
+              Sign Out
+            </button>
+          )}
         </div>
 
         {message && (
@@ -252,11 +300,12 @@ export default function DashboardPage() {
         )}
 
         {!profileId ? (
-          <form onSubmit={handleFetchProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
+          <form onSubmit={handleSendMagicLink} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
             <h2 className="text-lg font-semibold">Access Your Dashboard</h2>
+            <p className="text-xs text-neutral-400">Enter your registered email address to access your profile settings.</p>
             <div>
               <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                Enter Profile Email
+                Profile Email
               </label>
               <input
                 type="email"
@@ -270,10 +319,10 @@ export default function DashboardPage() {
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={sendingMagicLink || loading}
               className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50"
             >
-              {loading ? 'Loading Profile...' : 'Load Profile'}
+              {sendingMagicLink ? 'Sending Link...' : 'Load Dashboard'}
             </button>
           </form>
         ) : (

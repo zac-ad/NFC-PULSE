@@ -16,6 +16,7 @@ export default function ProfilePage({ params }: PageProps) {
   const [links, setLinks] = useState<any[]>([]);
   const [qrLinks, setQrLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingVCard, setDownloadingVCard] = useState(false);
   const [expandedQrId, setExpandedQrId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,6 +52,61 @@ export default function ProfilePage({ params }: PageProps) {
 
     loadProfileData();
   }, [targetSlug]);
+
+  const handleDownloadVCard = async () => {
+    if (!profile) return;
+    setDownloadingVCard(true);
+
+    try {
+      let photoLine = '';
+      if (profile.avatar_url) {
+        try {
+          const res = await fetch(profile.avatar_url);
+          const blob = await res.blob();
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve) => {
+            reader.onloadend = () => {
+              const base64Data = (reader.result as string).split(',')[1];
+              resolve(base64Data);
+            };
+          });
+          reader.readAsDataURL(blob);
+          const base64Photo = await base64Promise;
+          photoLine = `PHOTO;ENCODING=b;TYPE=JPEG:${base64Photo}`;
+        } catch {
+          console.warn('Could not load avatar for vCard embedding');
+        }
+      }
+
+      const vcardLines = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${profile.full_name || ''}`,
+        `N:${profile.full_name || ''};;;;`,
+        profile.company ? `ORG:${profile.company}` : '',
+        profile.title ? `TITLE:${profile.title}` : '',
+        profile.phone ? `TEL;TYPE=CELL:${profile.phone}` : '',
+        profile.email ? `EMAIL:${profile.email}` : '',
+        `URL:${window.location.href}`,
+        profile.bio ? `NOTE:${profile.bio.replace(/\n/g, ' ')}` : '',
+        photoLine,
+        'END:VCARD',
+      ].filter(Boolean);
+
+      const blob = new Blob([vcardLines.join('\n')], { type: 'text/vcard;charset=utf-8' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `${profile.slug || 'contact'}.vcf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert('Failed to generate contact file.');
+    } finally {
+      setDownloadingVCard(false);
+    }
+  };
 
   const getFaviconUrl = (urlStr: string) => {
     try {
@@ -102,8 +158,6 @@ export default function ProfilePage({ params }: PageProps) {
       </main>
     );
   }
-
-  const vcardData = `BEGIN:VCARD%0AVERSION:3.0%0AN:${encodeURIComponent(profile.full_name || '')}%0AORG:${encodeURIComponent(profile.company || '')}%0ATITLE:${encodeURIComponent(profile.title || '')}%0ATEL:${encodeURIComponent(profile.phone || '')}%0AEMAIL:${encodeURIComponent(profile.email || '')}%0AEND:VCARD`;
 
   return (
     <main className="min-h-screen bg-black text-white flex justify-center py-6 px-4 font-sans selection:bg-neutral-800">
@@ -186,16 +240,16 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
 
           <div className="flex items-center gap-2 pt-1">
-            <a
-              href={`data:text/vcard;charset=utf-8,${vcardData}`}
-              download={`${profile.slug}.vcf`}
-              className="flex-1 py-3.5 bg-white text-black font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:bg-neutral-200 transition-all"
+            <button
+              onClick={handleDownloadVCard}
+              disabled={downloadingVCard}
+              className="flex-1 py-3.5 bg-white text-black font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:bg-neutral-200 transition-all disabled:opacity-50"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
               </svg>
-              Save to Contacts
-            </a>
+              {downloadingVCard ? 'Generating Card...' : 'Save to Contacts'}
+            </button>
             <button
               onClick={() => {
                 if (navigator.share) {
