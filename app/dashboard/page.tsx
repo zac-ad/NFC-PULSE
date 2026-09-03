@@ -15,6 +15,22 @@ interface TapEvent {
   created_at: string;
 }
 
+interface ProfileData {
+  id: string;
+  account_id: string;
+  full_name: string;
+  title: string;
+  company: string;
+  bio: string;
+  phone: string;
+  email: string;
+  slug: string;
+  avatar_url: string;
+  banner_url: string;
+  is_active: boolean;
+  profile_type: 'PROFESSIONAL' | 'PERSONAL';
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
@@ -24,8 +40,12 @@ export default function DashboardPage() {
   const [uploadingQr, setUploadingQr] = useState(false);
 
   const [searchEmail, setSearchEmail] = useState('');
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [userAccount, setUserAccount] = useState<any>(null);
+  const [profiles, setProfiles] = useState<ProfileData[]>([]);
+  const [activeTab, setActiveTab] = useState<'PROFESSIONAL' | 'PERSONAL'>('PROFESSIONAL');
 
+  // Active Profile State Fields
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [title, setTitle] = useState('');
   const [company, setCompany] = useState('');
@@ -37,11 +57,13 @@ export default function DashboardPage() {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
+  // Card & Tap Data
+  const [assignedCardCode, setAssignedCardCode] = useState<string | null>(null);
   const [tapCount, setTapCount] = useState<number>(0);
   const [recentTaps, setRecentTaps] = useState<TapEvent[]>([]);
 
+  // Links & QRs
   const [items, setItems] = useState<LinkItem[]>([]);
-
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [qrTitle, setQrTitle] = useState('');
@@ -51,63 +73,157 @@ export default function DashboardPage() {
 
   useEffect(() => {
     document.title = 'Dashboard | PULSE';
-    checkSessionAndLoadProfile();
+    checkSessionAndLoad();
   }, []);
 
-  const checkSessionAndLoadProfile = async () => {
+  const checkSessionAndLoad = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user?.email) {
-      loadProfileByEmail(session.user.email);
+      loadAccountAndProfiles(session.user.email);
     }
   };
 
-  const loadProfileByEmail = async (targetEmail: string) => {
+  const loadAccountAndProfiles = async (targetEmail: string) => {
     setLoading(true);
     setMessage(null);
 
-    const { data: profile, error } = await supabase
-      .from('profiles')
+    // 1. Fetch or Create Account
+    let { data: account } = await supabase
+      .from('accounts')
       .select('*')
-      .eq('email', targetEmail)
+      .eq('email', targetEmail.trim())
       .single();
 
-    if (error || !profile) {
-      setMessage({ type: 'error', text: 'Profile not found with that email address.' });
+    if (!account) {
+      const { data: newAccount } = await supabase
+        .from('accounts')
+        .insert({ email: targetEmail.trim() })
+        .select()
+        .single();
+      account = newAccount;
+    }
+
+    if (!account) {
+      setMessage({ type: 'error', text: 'Unable to resolve account credentials.' });
       setLoading(false);
       return;
     }
 
-    setProfileId(profile.id);
-    setFullName(profile.full_name || '');
-    setTitle(profile.title || '');
-    setCompany(profile.company || '');
-    setBio(profile.bio || '');
-    setPhone(profile.phone || '');
-    setEmail(profile.email || '');
-    setSlug(profile.slug || '');
-    setAvatarUrl(profile.avatar_url || '');
-    setBannerUrl(profile.banner_url || '');
-    setIsActive(profile.is_active ?? true);
+    setUserAccount(account);
 
-    document.title = `${profile.full_name || 'Dashboard'} | PULSE`;
+    // 2. Fetch Profiles bound to this Account
+    let { data: fetchedProfiles } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('account_id', account.id);
 
+    // If no profiles exist, create a default PROFESSIONAL profile
+    if (!fetchedProfiles || fetchedProfiles.length === 0) {
+      const { data: defaultProfile } = await supabase
+        .from('profiles')
+        .insert({
+          account_id: account.id,
+          email: targetEmail,
+          full_name: 'New User',
+          slug: `user-${Date.now().toString().slice(-4)}`,
+          profile_type: 'PROFESSIONAL',
+        })
+        .select()
+        .single();
+
+      fetchedProfiles = defaultProfile ? [defaultProfile] : [];
+    }
+
+    setProfiles(fetchedProfiles);
+
+    // Load active tab profile
+    const targetProf = fetchedProfiles.find((p) => p.profile_type === activeTab) || fetchedProfiles[0];
+    if (targetProf) {
+      selectProfileToEdit(targetProf);
+    }
+
+    setLoading(false);
+  };
+
+  const selectProfileToEdit = async (prof: ProfileData) => {
+    setCurrentProfileId(prof.id);
+    setActiveTab(prof.profile_type);
+    setFullName(prof.full_name || '');
+    setTitle(prof.title || '');
+    setCompany(prof.company || '');
+    setBio(prof.bio || '');
+    setPhone(prof.phone || '');
+    setEmail(prof.email || prof.email);
+    setSlug(prof.slug || '');
+    setAvatarUrl(prof.avatar_url || '');
+    setBannerUrl(prof.banner_url || '');
+    setIsActive(prof.is_active ?? true);
+
+    document.title = `${prof.full_name || 'Dashboard'} (${prof.profile_type}) | PULSE`;
+
+    // Fetch Links
     const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
-      .eq('profile_id', profile.id)
+      .eq('profile_id', prof.id)
       .order('position', { ascending: true });
 
     setItems(profileItems || []);
 
+    // Fetch Assigned Hardware Card Code
+    const { data: cardData } = await supabase
+      .from('hardware_cards')
+      .select('card_code')
+      .eq('profile_id', prof.id)
+      .single();
+
+    setAssignedCardCode(cardData?.card_code || null);
+
+    // Fetch Tap Analytics
     const { data: tapsData, count } = await supabase
       .from('card_taps')
       .select('*', { count: 'exact' })
-      .eq('profile_id', profile.id)
+      .eq('profile_id', prof.id)
       .order('created_at', { ascending: false });
 
     setTapCount(count || 0);
     setRecentTaps(tapsData?.slice(0, 5) || []);
+  };
 
+  const handleTabSwitch = (type: 'PROFESSIONAL' | 'PERSONAL') => {
+    setActiveTab(type);
+    const existingProf = profiles.find((p) => p.profile_type === type);
+
+    if (existingProf) {
+      selectProfileToEdit(existingProf);
+    } else if (userAccount) {
+      // Create missing profile on the fly (e.g. creating Personal profile for the first time)
+      createMissingProfile(type);
+    }
+  };
+
+  const createMissingProfile = async (type: 'PROFESSIONAL' | 'PERSONAL') => {
+    setLoading(true);
+    const defaultSlug = `${userAccount.email.split('@')[0]}-${type.toLowerCase()}`;
+
+    const { data: newProf, error } = await supabase
+      .from('profiles')
+      .insert({
+        account_id: userAccount.id,
+        email: userAccount.email,
+        full_name: fullName || 'Isaac Salasiban',
+        slug: defaultSlug,
+        profile_type: type,
+      })
+      .select()
+      .single();
+
+    if (!error && newProf) {
+      const updatedList = [...profiles, newProf];
+      setProfiles(updatedList);
+      selectProfileToEdit(newProf);
+      setMessage({ type: 'success', text: `Created new ${type} profile!` });
+    }
     setLoading(false);
   };
 
@@ -126,8 +242,7 @@ export default function DashboardPage() {
     });
 
     if (error) {
-      // Fallback direct profile load if OTP is disabled in Supabase project settings
-      await loadProfileByEmail(searchEmail);
+      await loadAccountAndProfiles(searchEmail);
     } else {
       setMessage({
         type: 'success',
@@ -139,7 +254,8 @@ export default function DashboardPage() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setProfileId(null);
+    setUserAccount(null);
+    setCurrentProfileId(null);
     setMessage({ type: 'success', text: 'Signed out successfully.' });
   };
 
@@ -150,7 +266,7 @@ export default function DashboardPage() {
       if (type === 'qr') setUploadingQr(true);
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${profileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
+      const fileName = `${currentProfileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('profile-media')
@@ -178,7 +294,7 @@ export default function DashboardPage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profileId) return;
+    if (!currentProfileId) return;
 
     setSaving(true);
     setMessage(null);
@@ -197,22 +313,30 @@ export default function DashboardPage() {
         banner_url: bannerUrl,
         is_active: isActive,
       })
-      .eq('id', profileId);
+      .eq('id', currentProfileId);
 
     if (error) {
       setMessage({ type: 'error', text: 'Failed to update profile details.' });
     } else {
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setMessage({ type: 'success', text: `${activeTab} profile updated successfully!` });
+      // Update local state list
+      setProfiles((prev) =>
+        prev.map((p) =>
+          p.id === currentProfileId
+            ? { ...p, full_name: fullName, slug, title, company, bio, phone, email, avatar_url: avatarUrl, banner_url: bannerUrl, is_active: isActive }
+            : p
+        )
+      );
     }
     setSaving(false);
   };
 
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profileId || !linkTitle || !linkUrl) return;
+    if (!currentProfileId || !linkTitle || !linkUrl) return;
 
     const newLinkItem = {
-      profile_id: profileId,
+      profile_id: currentProfileId,
       title: linkTitle,
       url: linkUrl,
       type: 'link',
@@ -234,10 +358,10 @@ export default function DashboardPage() {
 
   const handleAddQr = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profileId || !qrTitle || !qrImageUrl) return;
+    if (!currentProfileId || !qrTitle || !qrImageUrl) return;
 
     const newQrItem = {
-      profile_id: profileId,
+      profile_id: currentProfileId,
       title: qrTitle,
       url: qrImageUrl,
       type: 'qr',
@@ -274,10 +398,10 @@ export default function DashboardPage() {
         
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">PULSE Dashboard</h1>
-            <p className="text-sm text-neutral-400">Manage your live NFC profile & telemetry</p>
+            <h1 className="text-2xl font-bold tracking-tight">PULSE Command</h1>
+            <p className="text-xs text-neutral-400">Manage multi-card profiles under {userAccount?.email || 'your account'}</p>
           </div>
-          {profileId && (
+          {userAccount && (
             <button
               onClick={handleSignOut}
               className="px-3.5 py-1.5 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-xs font-semibold rounded-lg transition-colors text-neutral-300"
@@ -289,7 +413,7 @@ export default function DashboardPage() {
 
         {message && (
           <div
-            className={`p-4 rounded-xl border text-sm ${
+            className={`p-4 rounded-xl border text-xs leading-relaxed ${
               message.type === 'success'
                 ? 'bg-emerald-950/50 border-emerald-800 text-emerald-300'
                 : 'bg-red-950/50 border-red-800 text-red-300'
@@ -299,13 +423,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!profileId ? (
+        {!userAccount ? (
           <form onSubmit={handleSendMagicLink} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-            <h2 className="text-lg font-semibold">Access Your Dashboard</h2>
-            <p className="text-xs text-neutral-400">Enter your registered email address to access your profile settings.</p>
+            <h2 className="text-lg font-semibold">Access Account Dashboard</h2>
+            <p className="text-xs text-neutral-400">Enter your registered email address to access your Work & Personal profiles.</p>
             <div>
               <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                Profile Email
+                Account Email
               </label>
               <input
                 type="email"
@@ -322,77 +446,98 @@ export default function DashboardPage() {
               disabled={sendingMagicLink || loading}
               className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50"
             >
-              {sendingMagicLink ? 'Sending Link...' : 'Load Dashboard'}
+              {sendingMagicLink ? 'Sending Link...' : 'Open Multi-Identity Dashboard'}
             </button>
           </form>
         ) : (
           <div className="space-y-6">
-            
+
+            {/* Profile Mode Switcher Tabs */}
+            <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-1.5 border border-neutral-800 rounded-2xl shadow-lg">
+              <button
+                onClick={() => handleTabSwitch('PROFESSIONAL')}
+                className={`py-3 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
+                  activeTab === 'PROFESSIONAL'
+                    ? 'bg-white text-black shadow-lg'
+                    : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                }`}
+              >
+                💼 Professional Card
+              </button>
+              <button
+                onClick={() => handleTabSwitch('PERSONAL')}
+                className={`py-3 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
+                  activeTab === 'PERSONAL'
+                    ? 'bg-white text-black shadow-lg'
+                    : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                }`}
+              >
+                🌴 Personal Card
+              </button>
+            </div>
+
+            {/* Assigned Card Status Banner */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4 flex items-center justify-between text-xs shadow-md">
+              <div className="space-y-0.5">
+                <p className="text-neutral-400 font-medium">Assigned Hardware Pass</p>
+                <p className="font-mono font-bold text-white text-sm">
+                  {assignedCardCode || 'No card paired yet'}
+                </p>
+              </div>
+              <a
+                href={`/activate?code=`}
+                className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 font-medium rounded-lg"
+              >
+                {assignedCardCode ? 'Pair Another Pass' : 'Pair Card'}
+              </a>
+            </div>
+
+            {/* Tap Analytics */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
-                <h2 className="text-lg font-semibold">Tap Analytics</h2>
-                <span className="text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
-                  LIVE TELEMETRY
+                <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300">{activeTab} Card Telemetry</h2>
+                <span className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
+                  LIVE STREAM
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-                  <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Total Physical Taps</p>
+                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Physical Taps ({activeTab})</p>
                   <p className="text-3xl font-black text-white mt-1">{tapCount}</p>
                 </div>
                 <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-                  <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Latest Tap Event</p>
-                  <p className="text-sm font-semibold text-neutral-200 mt-2">
+                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Latest Tap Event</p>
+                  <p className="text-xs font-semibold text-neutral-200 mt-2">
                     {recentTaps.length > 0
                       ? new Date(recentTaps[0].created_at).toLocaleString()
-                      : 'No tap events recorded yet'}
+                      : 'No taps logged yet'}
                   </p>
                 </div>
               </div>
-
-              {recentTaps.length > 0 && (
-                <div className="pt-2">
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Recent Physical Interactions</p>
-                  <div className="space-y-1.5">
-                    {recentTaps.map((tap) => (
-                      <div key={tap.id} className="flex justify-between items-center bg-neutral-900/50 border border-neutral-800/80 px-3 py-2 rounded-lg text-xs">
-                        <span className="text-neutral-300 font-mono">⚡ Hardware NFC Tap</span>
-                        <span className="text-neutral-500">{new Date(tap.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
+            {/* Profile Customization Form */}
             <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <h2 className="text-lg font-semibold">Profile Customization</h2>
-
-              <div className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-xl mb-4">
-                <div>
-                  <p className="text-sm font-semibold text-white">Public Profile Status</p>
-                  <p className="text-xs text-neutral-400">
-                    {isActive ? `Your profile is live at /p/${slug}` : 'Your profile is locked and hidden'}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
+                <h2 className="text-base font-bold text-white">{activeTab} Identity Details</h2>
                 <button
                   type="button"
                   onClick={() => setIsActive(!isActive)}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                  className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-colors ${
                     isActive
                       ? 'bg-emerald-950 border border-emerald-800 text-emerald-400'
                       : 'bg-red-950 border border-red-800 text-red-400'
                   }`}
                 >
-                  {isActive ? 'ACTIVE' : 'PRIVATE'}
+                  {isActive ? 'PROFILE LIVE' : 'PROFILE HIDDEN'}
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-neutral-900">
                 <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                    Profile Photo
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Avatar Image
                   </label>
                   <input
                     type="file"
@@ -401,19 +546,19 @@ export default function DashboardPage() {
                       if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'avatar');
                     }}
                     disabled={uploadingAvatar}
-                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
+                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
                   />
                   {avatarUrl && (
                     <div className="flex items-center gap-3 pt-1">
-                      <img src={avatarUrl} alt="Avatar Preview" className="w-10 h-10 rounded-full object-cover border border-neutral-700" />
-                      <span className="text-xs text-emerald-400 font-medium">Photo Attached</span>
+                      <img src={avatarUrl} alt="Avatar Preview" className="w-9 h-9 rounded-full object-cover border border-neutral-700" />
+                      <span className="text-xs text-emerald-400 font-medium">Avatar Attached</span>
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                    Background Banner
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Header Banner
                   </label>
                   <input
                     type="file"
@@ -422,11 +567,11 @@ export default function DashboardPage() {
                       if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'banner');
                     }}
                     disabled={uploadingBanner}
-                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
+                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
                   />
                   {bannerUrl && (
                     <div className="flex items-center gap-3 pt-1">
-                      <img src={bannerUrl} alt="Banner Preview" className="w-14 h-9 rounded-lg object-cover border border-neutral-700" />
+                      <img src={bannerUrl} alt="Banner Preview" className="w-14 h-8 rounded-lg object-cover border border-neutral-700" />
                       <span className="text-xs text-emerald-400 font-medium">Banner Attached</span>
                     </div>
                   )}
@@ -435,123 +580,116 @@ export default function DashboardPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Full Name
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    Display Name
                   </label>
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Profile Slug
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    URL Slug (/p/{slug})
                   </label>
                   <input
                     type="text"
                     value={slug}
                     onChange={(e) => setSlug(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Title
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    {activeTab === 'PROFESSIONAL' ? 'Job Title' : 'Nickname / Persona'}
                   </label>
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Company
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    {activeTab === 'PROFESSIONAL' ? 'Company' : 'Affiliation / Hobbies'}
                   </label>
                   <input
                     type="text"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Phone
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    Contact Phone
                   </label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                    Email
+                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    Contact Email
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
-                  Bio
+                <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                  Bio / Overview
                 </label>
                 <textarea
                   value={bio}
-                  rows={3}
+                  rows={2}
                   onChange={(e) => setBio(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-white"
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50"
+                className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50"
               >
-                {saving ? 'Saving...' : 'Save Profile Changes'}
+                {saving ? 'Saving Profile...' : `Save ${activeTab} Card Changes`}
               </button>
             </form>
 
+            {/* Links & QR Management */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <h2 className="text-lg font-semibold">Manage Profile Links</h2>
+              <h2 className="text-base font-bold text-white">{activeTab} Social Links</h2>
 
               <form onSubmit={handleAddLink} autoComplete="off" className="flex flex-col md:flex-row gap-3 border-b border-neutral-800 pb-4">
                 <input
                   type="text"
-                  placeholder="Title (e.g. Facebook)"
+                  placeholder="Link Title (e.g. LinkedIn)"
                   value={linkTitle}
                   onChange={(e) => setLinkTitle(e.target.value)}
-                  autoComplete="off"
                   className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
                 />
                 <input
                   type="text"
-                  placeholder="URL (e.g. https://facebook.com/...)"
+                  placeholder="URL (e.g. https://linkedin.com/...)"
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
-                  autoComplete="off"
                   className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
                 />
                 <button
                   type="submit"
-                  className="bg-white hover:bg-neutral-200 text-black text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
+                  className="bg-white hover:bg-neutral-200 text-black text-xs font-bold px-5 py-2 rounded-xl transition-colors"
                 >
                   Add Link
                 </button>
@@ -565,7 +703,7 @@ export default function DashboardPage() {
                       className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
                     >
                       <div>
-                        <p className="font-medium">{item.title}</p>
+                        <p className="font-semibold text-white">{item.title}</p>
                         <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
                       </div>
                       <button
@@ -577,22 +715,22 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-neutral-500 text-center py-2">No links added yet.</p>
+                  <p className="text-xs text-neutral-500 text-center py-2">No links added to {activeTab} profile yet.</p>
                 )}
               </div>
             </div>
 
+            {/* Payment QRs */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <h2 className="text-lg font-semibold">Manage Payment QR Codes</h2>
+              <h2 className="text-base font-bold text-white">{activeTab} Payment QRs</h2>
 
               <form onSubmit={handleAddQr} autoComplete="off" className="space-y-3 border-b border-neutral-800 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <input
                     type="text"
-                    placeholder="QR Title (e.g. GCash QR)"
+                    placeholder="Title (e.g. GCash / Maya)"
                     value={qrTitle}
                     onChange={(e) => setQrTitle(e.target.value)}
-                    autoComplete="off"
                     className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
                   />
                   <input
@@ -612,15 +750,14 @@ export default function DashboardPage() {
                     placeholder="Or paste QR Image URL directly..."
                     value={qrImageUrl}
                     onChange={(e) => setQrImageUrl(e.target.value)}
-                    autoComplete="off"
                     className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
                   />
                   <button
                     type="submit"
                     disabled={!qrTitle || !qrImageUrl}
-                    className="bg-white hover:bg-neutral-200 text-black text-sm font-semibold px-5 py-2 rounded-xl transition-colors disabled:opacity-40"
+                    className="bg-white hover:bg-neutral-200 text-black text-xs font-bold px-5 py-2 rounded-xl transition-colors disabled:opacity-40"
                   >
-                    Add QR Code
+                    Add QR
                   </button>
                 </div>
               </form>
@@ -633,9 +770,9 @@ export default function DashboardPage() {
                       className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
                     >
                       <div className="flex items-center gap-3">
-                        <img src={item.url} alt={item.title} className="w-10 h-10 object-cover rounded-lg border border-neutral-700 bg-white" />
+                        <img src={item.url} alt={item.title} className="w-9 h-9 object-cover rounded-lg border border-neutral-700 bg-white" />
                         <div>
-                          <p className="font-medium">{item.title}</p>
+                          <p className="font-semibold text-white">{item.title}</p>
                           <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
                         </div>
                       </div>
@@ -648,7 +785,7 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-neutral-500 text-center py-2">No QR codes added yet.</p>
+                  <p className="text-xs text-neutral-500 text-center py-2">No payment QRs added yet.</p>
                 )}
               </div>
             </div>
