@@ -89,7 +89,7 @@ export default function DashboardPage() {
 
     const cleanEmail = targetEmail.trim().toLowerCase();
 
-    // 1. Fetch existing account (using maybeSingle to prevent zero-row throw)
+    // 1. Fetch existing account
     let { data: account, error: accountFetchError } = await supabase
       .from('accounts')
       .select('*')
@@ -123,7 +123,6 @@ export default function DashboardPage() {
       .select('*')
       .or(`account_id.eq.${account.id},email.ilike.${cleanEmail}`);
 
-    // If existing profiles were found without account_id, bind them now
     if (fetchedProfiles && fetchedProfiles.length > 0) {
       const unlinkedProfiles = fetchedProfiles.filter((p) => !p.account_id);
       if (unlinkedProfiles.length > 0) {
@@ -133,7 +132,6 @@ export default function DashboardPage() {
           .eq('email', cleanEmail);
       }
     } else {
-      // Create a default PROFESSIONAL profile if none exists
       const { data: defaultProf } = await supabase
         .from('profiles')
         .insert({
@@ -151,7 +149,6 @@ export default function DashboardPage() {
 
     setProfiles(fetchedProfiles);
 
-    // Load active tab profile
     const targetProf = fetchedProfiles.find((p) => p.profile_type === activeTab) || fetchedProfiles[0];
     if (targetProf) {
       selectProfileToEdit(targetProf);
@@ -176,7 +173,6 @@ export default function DashboardPage() {
 
     document.title = `${prof.full_name || 'Dashboard'} (${prof.profile_type}) | PULSE`;
 
-    // Fetch Links
     const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
@@ -185,7 +181,6 @@ export default function DashboardPage() {
 
     setItems(profileItems || []);
 
-    // Fetch Assigned Hardware Card Code
     const { data: cardData } = await supabase
       .from('hardware_cards')
       .select('card_code')
@@ -194,7 +189,6 @@ export default function DashboardPage() {
 
     setAssignedCardCode(cardData?.card_code || null);
 
-    // Fetch Tap Analytics
     const { data: tapsData, count } = await supabase
       .from('card_taps')
       .select('*', { count: 'exact' })
@@ -212,7 +206,6 @@ export default function DashboardPage() {
     if (existingProf) {
       selectProfileToEdit(existingProf);
     } else if (userAccount) {
-      // Create missing profile on the fly (e.g. creating Personal profile for the first time)
       createMissingProfile(type);
     }
   };
@@ -240,6 +233,30 @@ export default function DashboardPage() {
       setMessage({ type: 'success', text: `Created new ${type} profile!` });
     }
     setLoading(false);
+  };
+
+  const handleToggleActiveStatus = async () => {
+    if (!currentProfileId) return;
+    const newStatus = !isActive;
+    setIsActive(newStatus);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_active: newStatus })
+      .eq('id', currentProfileId);
+
+    if (error) {
+      setIsActive(!newStatus);
+      setMessage({ type: 'error', text: 'Failed to update privacy status.' });
+    } else {
+      setMessage({
+        type: 'success',
+        text: `${activeTab} profile is now ${newStatus ? 'PUBLIC & LIVE' : 'PRIVATE & LOCKED'}.`,
+      });
+      setProfiles((prev) =>
+        prev.map((p) => (p.id === currentProfileId ? { ...p, is_active: newStatus } : p))
+      );
+    }
   };
 
   const handleSendMagicLink = async (e: React.FormEvent) => {
@@ -334,7 +351,6 @@ export default function DashboardPage() {
       setMessage({ type: 'error', text: 'Failed to update profile details.' });
     } else {
       setMessage({ type: 'success', text: `${activeTab} profile updated successfully!` });
-      // Update local state list
       setProfiles((prev) =>
         prev.map((p) =>
           p.id === currentProfileId
@@ -491,6 +507,34 @@ export default function DashboardPage() {
               </button>
             </div>
 
+            {/* Instant Privacy Toggle Card */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 flex items-center justify-between shadow-xl">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
+                  <p className="text-sm font-bold text-white">
+                    {isActive ? 'Public & Active' : 'Private & Locked'}
+                  </p>
+                </div>
+                <p className="text-xs text-neutral-400">
+                  {isActive
+                    ? `Tapping this ${activeTab.toLowerCase()} card opens /p/${slug}`
+                    : `Tapping this card displays a "Profile Private" locked screen.`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleActiveStatus}
+                className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                  isActive
+                    ? 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                    : 'bg-red-950 border-red-800 text-red-400 hover:bg-red-900'
+                }`}
+              >
+                {isActive ? 'Set Private' : 'Make Public'}
+              </button>
+            </div>
+
             {/* Assigned Card Status Banner */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4 flex items-center justify-between text-xs shadow-md">
               <div className="space-y-0.5">
@@ -536,17 +580,6 @@ export default function DashboardPage() {
             <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
                 <h2 className="text-base font-bold text-white">{activeTab} Identity Details</h2>
-                <button
-                  type="button"
-                  onClick={() => setIsActive(!isActive)}
-                  className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-emerald-950 border border-emerald-800 text-emerald-400'
-                      : 'bg-red-950 border border-red-800 text-red-400'
-                  }`}
-                >
-                  {isActive ? 'PROFILE LIVE' : 'PROFILE HIDDEN'}
-                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-neutral-900">
