@@ -1,122 +1,163 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-function ActivationContent() {
+function ActivateContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initialCode = searchParams.get('code') || '';
 
-  const [cardCode, setCardCode] = useState(initialCode);
+  const [cardCode, setCardCode] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [slug, setSlug] = useState('');
+  const [profileType, setProfileType] = useState<'PROFESSIONAL' | 'PERSONAL'>('PROFESSIONAL');
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     document.title = 'Activate Hardware Pass | PULSE';
-    if (initialCode) {
-      setCardCode(initialCode.toUpperCase());
+    const codeParam = searchParams.get('code');
+    if (codeParam) {
+      setCardCode(codeParam.toUpperCase().trim());
     }
-  }, [initialCode]);
+  }, [searchParams]);
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!cardCode || !email || !slug || !fullName) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields.' });
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
-    const formattedCode = cardCode.trim().toUpperCase();
-    const formattedSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
-
     try {
-      // 1. Verify Card Exists & Is UNCLAIMED
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanCode = cardCode.trim().toUpperCase();
+      const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
+
+      // 1. Verify Card Exists and is Unclaimed
       const { data: card, error: cardError } = await supabase
         .from('hardware_cards')
         .select('*')
-        .eq('card_code', formattedCode)
-        .single();
+        .eq('card_code', cleanCode)
+        .maybeSingle();
 
       if (cardError || !card) {
-        throw new Error('Invalid hardware code. Please verify the code on your pass.');
+        throw new Error('Invalid Hardware Card Code. Please check the code printed on your pass.');
       }
 
-      if (card.status === 'ACTIVE') {
-        throw new Error('This hardware card has already been claimed and activated.');
+      if (card.status === 'ACTIVE' && card.profile_id) {
+        throw new Error('This card is already claimed and activated.');
       }
 
-      // 2. Upsert User Profile
-      let { data: profile, error: profileError } = await supabase
+      // 2. Resolve Account (Find or Create)
+      let { data: account } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      if (!account) {
+        const { data: newAccount, error: accErr } = await supabase
+          .from('accounts')
+          .upsert({ email: cleanEmail }, { onConflict: 'email' })
+          .select()
+          .maybeSingle();
+
+        if (accErr || !newAccount) throw new Error('Could not set up account record.');
+        account = newAccount;
+      }
+
+      // 3. Resolve or Create Profile for selected Profile Type
+      let { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
-        .eq('email', email.trim())
-        .single();
+        .eq('account_id', account.id)
+        .eq('profile_type', profileType)
+        .maybeSingle();
 
-      if (!profile) {
-        const { data: newProfile, error: createError } = await supabase
+      let targetProfileId = existingProfile?.id;
+
+      if (!existingProfile) {
+        const { data: newProfile, error: profErr } = await supabase
           .from('profiles')
           .insert({
+            account_id: account.id,
+            email: cleanEmail,
             full_name: fullName,
-            email: email.trim(),
-            slug: formattedSlug,
+            slug: cleanSlug,
+            profile_type: profileType,
             is_active: true,
           })
           .select()
           .single();
 
-        if (createError) throw createError;
-        profile = newProfile;
+        if (profErr) {
+          if (profErr.message.includes('slug')) {
+            throw new Error('This profile slug is already taken. Please choose another one.');
+          }
+          throw profErr;
+        }
+        targetProfileId = newProfile.id;
       }
 
-      // 3. Link Card to Profile & Mark ACTIVE
-      const { error: linkError } = await supabase
+      // 4. Pair Hardware Card to Target Profile
+      const { error: bindError } = await supabase
         .from('hardware_cards')
         .update({
           status: 'ACTIVE',
-          profile_id: profile.id,
+          profile_id: targetProfileId,
         })
         .eq('id', card.id);
 
-      if (linkError) throw linkError;
+      if (bindError) throw bindError;
 
-      // 4. Trigger Automated Activation Email
-      await fetch('/api/send-welcome', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          fullName,
-          cardCode: formattedCode,
-          slug: profile.slug || formattedSlug,
-        }),
-      });
+      // 5. Trigger Transactional Welcome Email via Resend
+      try {
+        await fetch('/api/send-welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, name: fullName, slug: cleanSlug, cardCode: cleanCode }),
+        });
+      } catch {
+        console.warn('Welcome email trigger skipped.');
+      }
 
       setMessage({
         type: 'success',
-        text: `Hardware Pass ${formattedCode} successfully claimed! Activation email sent to ${email}.`,
+        text: `Hardware pass successfully linked to your ${profileType} profile! Redirecting to dashboard...`,
       });
 
       setTimeout(() => {
-        router.push(`/p/${profile.slug || formattedSlug}`);
-      }, 2000);
+        router.push('/dashboard');
+      }, 1500);
+
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Activation failed.' });
+      setMessage({
+        type: 'error',
+        text: err.message || 'Failed to activate hardware pass.',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 flex items-center justify-center font-sans">
-      <div className="max-w-md w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-8 space-y-6 shadow-2xl">
+    <main className="min-h-screen bg-black text-white flex items-center justify-center p-4 font-sans selection:bg-neutral-800">
+      <div className="max-w-md w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-2xl flex items-center justify-center mx-auto text-xl">
+          <div className="w-10 h-10 bg-amber-950/80 border border-amber-800/80 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-lg font-bold shadow-lg">
             ⚡
           </div>
           <h1 className="text-xl font-bold tracking-tight text-white">Activate Hardware Pass</h1>
-          <p className="text-xs text-neutral-400">Pair your physical PULSE card to your digital identity.</p>
+          <p className="text-xs text-neutral-400 leading-relaxed">
+            Pair your physical PULSE card to your Work or Personal identity.
+          </p>
         </div>
 
         {message && (
@@ -131,23 +172,23 @@ function ActivationContent() {
           </div>
         )}
 
-        <form onSubmit={handleActivate} className="space-y-4">
+        <form onSubmit={handleActivate} autoComplete="off" className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Hardware Card Code
             </label>
             <input
               type="text"
               value={cardCode}
-              onChange={(e) => setCardCode(e.target.value)}
-              placeholder="e.g. CARD-9002"
+              onChange={(e) => setCardCode(e.target.value.toUpperCase())}
+              placeholder="E.G. CARD-9002"
               required
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono uppercase focus:outline-none focus:border-neutral-600"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Full Name
             </label>
             <input
@@ -156,12 +197,12 @@ function ActivationContent() {
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Isaac Salasiban"
               required
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-600"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Email Address
             </label>
             <input
@@ -170,31 +211,62 @@ function ActivationContent() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@domain.com"
               required
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-600"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
           </div>
 
+          {/* Profile Identity Type Selector */}
           <div>
-            <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+              Card Profile Identity
+            </label>
+            <div className="grid grid-cols-2 gap-2 bg-neutral-900 p-1 border border-neutral-800 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setProfileType('PROFESSIONAL')}
+                className={`py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  profileType === 'PROFESSIONAL'
+                    ? 'bg-white text-black shadow-md'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                💼 Professional
+              </button>
+              <button
+                type="button"
+                onClick={() => setProfileType('PERSONAL')}
+                className={`py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  profileType === 'PERSONAL'
+                    ? 'bg-white text-black shadow-md'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🌴 Personal
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Desired Profile Slug
             </label>
             <input
               type="text"
               value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="e.g. isaac"
+              onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+              placeholder="e.g. isaac-work"
               required
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-600"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
-            <p className="text-[10px] text-neutral-500 mt-1">Your public URL will be: /p/{slug || 'your-slug'}</p>
+            <p className="text-[11px] text-neutral-500 mt-1">Your public URL will be: /p/{slug || 'your-slug'}</p>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-white text-black font-bold text-sm rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 mt-2"
+            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-neutral-200 transition-colors shadow-lg disabled:opacity-50 mt-2"
           >
-            {loading ? 'Pairing Pass...' : 'Claim & Activate Hardware Pass'}
+            {loading ? 'Activating Pass...' : 'Claim & Activate Hardware Pass'}
           </button>
         </form>
       </div>
@@ -204,12 +276,8 @@ function ActivationContent() {
 
 export default function ActivatePage() {
   return (
-    <Suspense fallback={
-      <main className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-xs text-neutral-500 animate-pulse">Loading activation setup...</p>
-      </main>
-    }>
-      <ActivationContent />
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-neutral-500 text-xs">Loading activation interface...</div>}>
+      <ActivateContent />
     </Suspense>
   );
 }
