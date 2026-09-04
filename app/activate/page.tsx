@@ -40,7 +40,6 @@ function ActivateContent() {
       const cleanCode = cardCode.trim().toUpperCase();
       const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
 
-      // 1. Verify Card Exists and is Unclaimed
       const { data: card, error: cardError } = await supabase
         .from('hardware_cards')
         .select('*')
@@ -55,7 +54,6 @@ function ActivateContent() {
         throw new Error('This card is already claimed and activated.');
       }
 
-      // 2. Resolve Account (Find or Create)
       let { data: account } = await supabase
         .from('accounts')
         .select('*')
@@ -73,7 +71,6 @@ function ActivateContent() {
         account = newAccount;
       }
 
-      // 3. Resolve or Create Profile for selected Profile Type
       let { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
@@ -106,7 +103,6 @@ function ActivateContent() {
         targetProfileId = newProfile.id;
       }
 
-      // 4. Pair Hardware Card to Target Profile
       const { error: bindError } = await supabase
         .from('hardware_cards')
         .update({
@@ -117,7 +113,6 @@ function ActivateContent() {
 
       if (bindError) throw bindError;
 
-      // 5. Trigger Transactional Welcome Email via Resend
       try {
         await fetch('/api/send-welcome', {
           method: 'POST',
@@ -155,8 +150,13 @@ function ActivateContent() {
             ⚡
           </div>
           <h1 className="text-xl font-bold tracking-tight text-white">Activate Hardware Pass</h1>
-          <p className="text-xs text-neutral-400 leading-relaxed">
-            Pair your physical PULSE card to your Work or Personal identity.
+          <p className="text-xs font-semibold text-amber-400 tracking-wide">
+            {profileType === 'PROFESSIONAL'
+              ? 'Professional Unified Live Share Experience'
+              : 'Personal Unified Live Share Experience'}
+          </p>
+          <p className="text-[11px] text-neutral-500">
+            Pair your physical card to your digital identity.
           </p>
         </div>
 
@@ -215,7 +215,6 @@ function ActivateContent() {
             />
           </div>
 
-          {/* Profile Identity Type Selector */}
           <div>
             <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Card Profile Identity

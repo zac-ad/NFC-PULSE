@@ -89,14 +89,12 @@ export default function DashboardPage() {
 
     const cleanEmail = targetEmail.trim().toLowerCase();
 
-    // 1. Fetch existing account
-    let { data: account, error: accountFetchError } = await supabase
+    let { data: account } = await supabase
       .from('accounts')
       .select('*')
       .eq('email', cleanEmail)
       .maybeSingle();
 
-    // 2. If no account exists, create one
     if (!account) {
       const { data: newAccount, error: createAccountError } = await supabase
         .from('accounts')
@@ -117,7 +115,6 @@ export default function DashboardPage() {
 
     setUserAccount(account);
 
-    // 3. Fetch Profiles bound to this Account
     let { data: fetchedProfiles } = await supabase
       .from('profiles')
       .select('*')
@@ -427,10 +424,15 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center font-sans">
       <div className="max-w-2xl w-full space-y-6">
         
+        {/* Dynamic PULSE Branding Header */}
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">PULSE Command</h1>
-            <p className="text-xs text-neutral-400">Manage multi-card profiles under {userAccount?.email || 'your account'}</p>
+            <p className="text-xs text-amber-400 font-medium tracking-wide">
+              {activeTab === 'PROFESSIONAL'
+                ? 'Professional Unified Live Share Experience'
+                : 'Personal Unified Live Share Experience'}
+            </p>
           </div>
           {userAccount && (
             <button

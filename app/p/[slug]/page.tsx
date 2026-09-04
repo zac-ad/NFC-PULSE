@@ -1,377 +1,230 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import Link from 'next/link';
 
-interface PageProps {
-  params: Promise<{ slug: string }>;
+interface LinkItem {
+  id: string;
+  title: string;
+  url: string;
+  type: 'link' | 'qr';
 }
 
-export default function ProfilePage({ params }: PageProps) {
-  const resolvedParams = use(params);
-  const targetSlug = resolvedParams.slug?.trim();
+interface ProfileData {
+  id: string;
+  full_name: string;
+  title: string;
+  company: string;
+  bio: string;
+  phone: string;
+  email: string;
+  slug: string;
+  avatar_url: string;
+  banner_url: string;
+  is_active: boolean;
+  profile_type: 'PROFESSIONAL' | 'PERSONAL';
+}
 
-  const [profile, setProfile] = useState<any>(null);
-  const [links, setLinks] = useState<any[]>([]);
-  const [qrLinks, setQrLinks] = useState<any[]>([]);
+const resolveDeepLink = (urlStr: string) => {
+  if (!urlStr) return '#';
+  const cleanUrl = urlStr.trim();
+
+  if (cleanUrl.includes('instagram.com/')) {
+    const handle = cleanUrl.split('instagram.com/')[1]?.split('/')[0]?.replace('@', '');
+    if (handle) return `instagram://user?username=${handle}`;
+  }
+
+  if (cleanUrl.includes('linkedin.com/in/')) {
+    const handle = cleanUrl.split('linkedin.com/in/')[1]?.split('/')[0];
+    if (handle) return `linkedin://profile/${handle}`;
+  }
+
+  if (cleanUrl.includes('wa.me/') || cleanUrl.includes('api.whatsapp.com/')) {
+    const number = cleanUrl.split('/').pop()?.replace(/[^0-9]/g, '');
+    if (number) return `whatsapp://send?phone=${number}`;
+  }
+
+  if (cleanUrl.includes('twitter.com/') || cleanUrl.includes('x.com/')) {
+    const handle = cleanUrl.split(/\/(twitter|x)\.com\//)[2]?.split('/')[0];
+    if (handle) return `twitter://user?screen_name=${handle}`;
+  }
+
+  if (cleanUrl.includes('facebook.com/')) {
+    return `fb://facewebmodal/f?href=${encodeURIComponent(cleanUrl)}`;
+  }
+
+  return cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`;
+};
+
+export default function PublicProfilePage() {
+  const params = useParams();
+  const slug = params?.slug as string;
+
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloadingVCard, setDownloadingVCard] = useState(false);
-  const [expandedQrId, setExpandedQrId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!targetSlug) return;
+    if (slug) fetchProfileData();
+  }, [slug]);
 
-    async function loadProfileData() {
-      setLoading(true);
-      const { data: prof } = await supabase
-        .from('profiles')
+  const fetchProfileData = async () => {
+    setLoading(true);
+    const { data: profData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('slug', slug)
+      .maybeSingle();
+
+    if (profData) {
+      setProfile(profData);
+      document.title = `${profData.full_name} | PULSE`;
+
+      const { data: linkData } = await supabase
+        .from('profile_links')
         .select('*')
-        .ilike('slug', targetSlug)
-        .single();
+        .eq('profile_id', profData.id)
+        .order('position', { ascending: true });
 
-      if (prof) {
-        setProfile(prof);
-        document.title = `${prof.full_name || 'Profile'} | PULSE`;
-
-        const { data: allLinks } = await supabase
-          .from('profile_links')
-          .select('*')
-          .eq('profile_id', prof.id)
-          .order('position', { ascending: true });
-
-        if (allLinks) {
-          setLinks(allLinks.filter((l) => l.type !== 'qr'));
-          setQrLinks(allLinks.filter((l) => l.type === 'qr'));
-        }
-      } else {
-        document.title = 'Profile Not Found | PULSE';
-      }
-      setLoading(false);
+      setLinks(linkData || []);
     }
-
-    loadProfileData();
-  }, [targetSlug]);
-
-  const handleDownloadVCard = async () => {
-    if (!profile) return;
-    setDownloadingVCard(true);
-
-    try {
-      let photoLine = '';
-      if (profile.avatar_url) {
-        try {
-          const res = await fetch(profile.avatar_url);
-          const blob = await res.blob();
-          const reader = new FileReader();
-          const base64Promise = new Promise<string>((resolve) => {
-            reader.onloadend = () => {
-              const base64Data = (reader.result as string).split(',')[1];
-              resolve(base64Data);
-            };
-          });
-          reader.readAsDataURL(blob);
-          const base64Photo = await base64Promise;
-          photoLine = `PHOTO;ENCODING=b;TYPE=JPEG:${base64Photo}`;
-        } catch {
-          console.warn('Could not load avatar for vCard embedding');
-        }
-      }
-
-      const vcardLines = [
-        'BEGIN:VCARD',
-        'VERSION:3.0',
-        `FN:${profile.full_name || ''}`,
-        `N:${profile.full_name || ''};;;;`,
-        profile.company ? `ORG:${profile.company}` : '',
-        profile.title ? `TITLE:${profile.title}` : '',
-        profile.phone ? `TEL;TYPE=CELL:${profile.phone}` : '',
-        profile.email ? `EMAIL:${profile.email}` : '',
-        `URL:${window.location.href}`,
-        profile.bio ? `NOTE:${profile.bio.replace(/\n/g, ' ')}` : '',
-        photoLine,
-        'END:VCARD',
-      ].filter(Boolean);
-
-      const blob = new Blob([vcardLines.join('\n')], { type: 'text/vcard;charset=utf-8' });
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.setAttribute('download', `${profile.slug || 'contact'}.vcf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      alert('Failed to generate contact file.');
-    } finally {
-      setDownloadingVCard(false);
-    }
+    setLoading(false);
   };
 
-  const getFaviconUrl = (urlStr: string) => {
-    try {
-      const formattedUrl = urlStr.startsWith('http') ? urlStr : `https://${urlStr}`;
-      const domain = new URL(formattedUrl).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-    } catch {
-      return null;
-    }
+  const generateVCard = () => {
+    if (!profile) return;
+    const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:${profile.full_name}
+TITLE:${profile.title || ''}
+ORG:${profile.company || ''}
+TEL:${profile.phone || ''}
+EMAIL:${profile.email || ''}
+NOTE:${profile.bio || ''}
+END:VCARD`;
+
+    const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${profile.slug}.vcf`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center p-4">
-        <p className="text-neutral-500 font-medium text-sm animate-pulse">Loading profile...</p>
-      </main>
+      <div className="min-h-screen bg-black flex items-center justify-center text-neutral-500 text-xs">
+        Loading identity...
+      </div>
     );
   }
 
-  if (!profile) {
+  if (!profile || !profile.is_active) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="text-center">
-          <p className="text-neutral-400 font-semibold mb-2">Profile not found.</p>
-          <Link href="/" className="text-xs text-neutral-500 underline">Return Home</Link>
-        </div>
-      </main>
-    );
-  }
-
-  if (profile.is_active === false) {
-    return (
-      <main className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="max-w-sm w-full bg-neutral-950 rounded-3xl p-8 text-center border border-neutral-800 shadow-2xl">
-          <div className="w-12 h-12 bg-neutral-900 text-neutral-400 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+        <div className="max-w-sm w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-8 text-center space-y-3">
+          <div className="w-12 h-12 bg-red-950/80 border border-red-800 text-red-400 rounded-2xl flex items-center justify-center mx-auto text-xl">
             🔒
           </div>
-          <h1 className="text-lg font-bold text-white mb-2">Profile Private</h1>
-          <p className="text-neutral-400 text-xs leading-relaxed mb-6">
-            This digital business card has been temporarily locked by the owner.
+          <h1 className="text-lg font-bold">Profile Locked</h1>
+          <p className="text-xs text-neutral-400">
+            This card is set to private by its owner or has not been activated yet.
           </p>
-          <Link
-            href="/"
-            className="inline-block w-full py-3 bg-white text-black text-xs font-semibold rounded-2xl hover:bg-neutral-200 transition-colors"
-          >
-            Return Home
-          </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
+  const socialLinks = links.filter((l) => l.type !== 'qr');
+  const qrCodes = links.filter((l) => l.type === 'qr');
+
   return (
-    <main className="min-h-screen bg-black text-white flex justify-center py-6 px-4 font-sans selection:bg-neutral-800">
-      <div className="w-full max-w-sm space-y-5">
+    <main className="min-h-screen bg-black text-white p-4 flex justify-center font-sans selection:bg-neutral-800">
+      <div className="max-w-md w-full space-y-6 my-auto py-6">
         
-        <div className="relative">
-          <div className="w-full h-44 bg-neutral-900 border border-neutral-800/80 rounded-3xl overflow-hidden shadow-2xl">
-            {profile.banner_url ? (
-              <img
-                src={profile.banner_url}
-                alt="Banner"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-neutral-700 font-black text-3xl tracking-widest uppercase">
-                {profile.company || 'PULSE'}
-              </div>
+        {/* Banner & Avatar Profile Card */}
+        <div className="bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl relative">
+          <div className="h-32 bg-neutral-900 w-full relative">
+            {profile.banner_url && (
+              <img src={profile.banner_url} alt="Banner" className="w-full h-full object-cover" />
             )}
           </div>
+          <div className="px-6 pb-6 pt-0 relative">
+            <div className="-mt-12 mb-4 flex justify-between items-end">
+              <div className="w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-xl">
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-neutral-600">
+                    {profile.full_name[0]}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={generateVCard}
+                className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl hover:bg-neutral-200 transition-all shadow-lg"
+              >
+                Save Contact
+              </button>
+            </div>
 
-          <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
-            <div className="w-28 h-28 rounded-full border-4 border-black bg-neutral-900 overflow-hidden shadow-2xl flex items-center justify-center text-white text-3xl font-bold">
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.full_name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span>{profile.full_name?.charAt(0) || 'P'}</span>
+            <div className="space-y-1">
+              <h1 className="text-xl font-bold text-white tracking-tight">{profile.full_name}</h1>
+              {(profile.title || profile.company) && (
+                <p className="text-xs text-amber-400 font-semibold">
+                  {profile.title} {profile.company ? `at ${profile.company}` : ''}
+                </p>
               )}
+              {profile.bio && <p className="text-xs text-neutral-400 pt-2 leading-relaxed">{profile.bio}</p>}
             </div>
           </div>
         </div>
 
-        <div className="pt-12 text-center space-y-4">
-          <div className="flex items-center justify-center gap-1.5">
-            <h1 className="text-xl font-bold tracking-tight text-white">
-              {profile.full_name}
-            </h1>
-            <svg className="w-5 h-5 text-sky-400 fill-current" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-            </svg>
+        {/* Links */}
+        {socialLinks.length > 0 && (
+          <div className="space-y-2">
+            {socialLinks.map((link) => (
+              <a
+                key={link.id}
+                href={resolveDeepLink(link.url)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between p-4 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-white rounded-2xl transition-all group shadow-sm"
+              >
+                <span className="font-semibold text-sm">{link.title}</span>
+                <span className="text-neutral-500 group-hover:text-white transition-colors text-xs">➔</span>
+              </a>
+            ))}
           </div>
+        )}
 
-          {(profile.title || profile.company) && (
-            <p className="text-xs text-neutral-400 font-medium -mt-2">
-              {profile.title} {profile.company && `at ${profile.company}`}
-            </p>
-          )}
-
-          <div className="flex items-center justify-center gap-3">
-            <a
-              href={`tel:${profile.phone || ''}`}
-              className="w-11 h-11 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
-              title="Call Phone"
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-              </svg>
-            </a>
-            <a
-              href={`sms:${profile.phone || ''}`}
-              className="w-11 h-11 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
-              title="Send Message"
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z" />
-              </svg>
-            </a>
-            <a
-              href={`mailto:${profile.email || ''}`}
-              className="w-11 h-11 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
-              title="Send Email"
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
-              </svg>
-            </a>
+        {/* Payment QRs */}
+        {qrCodes.length > 0 && (
+          <div className="bg-neutral-950 border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-xl">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Payment Gateways</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {qrCodes.map((qr) => (
+                <div key={qr.id} className="bg-neutral-900 border border-neutral-800 p-3 rounded-2xl text-center space-y-2">
+                  <img src={qr.url} alt={qr.title} className="w-full aspect-square object-cover rounded-xl bg-white p-1" />
+                  <p className="text-xs font-bold text-white truncate">{qr.title}</p>
+                </div>
+              ))}
+            </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              onClick={handleDownloadVCard}
-              disabled={downloadingVCard}
-              className="flex-1 py-3.5 bg-white text-black font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:bg-neutral-200 transition-all disabled:opacity-50"
-            >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-              </svg>
-              {downloadingVCard ? 'Generating Card...' : 'Save to Contacts'}
-            </button>
-            <button
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({ title: profile.full_name, url: window.location.href });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                  alert('Link copied to clipboard!');
-                }
-              }}
-              className="w-12 h-12 bg-neutral-900 border border-neutral-800 text-white rounded-2xl flex items-center justify-center hover:bg-neutral-800 hover:border-neutral-700 transition-all shadow-sm"
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-3 pt-2">
-          <div className="inline-block px-3 py-1 bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold rounded-lg">
-            Links
-          </div>
-
-          <div className="space-y-2.5">
-            {links.length > 0 ? (
-              links.map((link) => {
-                const logoUrl = getFaviconUrl(link.url);
-                return (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between p-4 bg-neutral-950/80 hover:bg-neutral-900 border border-neutral-800 text-white rounded-2xl transition-all group shadow-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0 overflow-hidden">
-                        {logoUrl ? (
-                          <img
-                            src={logoUrl}
-                            alt={link.title}
-                            className="w-5 h-5 object-contain"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <span className="text-neutral-400 font-bold text-xs">
-                            {link.title.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-sm font-semibold text-white">
-                        {link.title}
-                      </span>
-                    </div>
-                    <svg className="w-4 h-4 text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </a>
-                );
-              })
-            ) : (
-              <div className="p-4 bg-neutral-950/50 border border-neutral-800/60 rounded-2xl text-center text-neutral-500 text-xs">
-                No links added yet.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-3 pt-2">
-          <div className="inline-block px-3 py-1 bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold rounded-lg">
-            QR Codes
-          </div>
-
-          <div className="space-y-2.5">
-            {qrLinks.length > 0 ? (
-              qrLinks.map((qr) => {
-                const isExpanded = expandedQrId === qr.id;
-                return (
-                  <div key={qr.id} className="bg-neutral-950/80 border border-neutral-800 rounded-2xl overflow-hidden transition-all shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedQrId(isExpanded ? null : qr.id)}
-                      className="w-full flex items-center justify-between p-4 text-left font-semibold text-white text-sm"
-                    >
-                      <span>{qr.title}</span>
-                      <svg className={`w-4 h-4 text-neutral-500 transition-transform ${isExpanded ? 'rotate-180 text-white' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-5 text-center flex flex-col items-center">
-                        <div className="bg-white p-3 rounded-2xl border border-neutral-800 inline-block mb-2 shadow-inner">
-                          <img src={qr.url} alt={qr.title} className="w-48 h-48 object-contain rounded-lg" />
-                        </div>
-                        <p className="text-xs text-neutral-400">Scan code to send payment</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-4 bg-neutral-950/50 border border-neutral-800/60 rounded-2xl text-center text-neutral-500 text-xs">
-                No payment QR codes added yet.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="pt-6 pb-4 text-center space-y-3">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-semibold rounded-full border border-neutral-800 transition-all"
-          >
-            Get Your Own Card ›
-          </Link>
-          <p className="text-[11px] text-neutral-500 font-medium tracking-wide">
-            Powered by <span className="font-bold text-white tracking-widest">P U L S E</span>
+        {/* Dynamic PULSE Branding Footer */}
+        <footer className="text-center pt-8 pb-6 border-t border-neutral-900 mt-8 space-y-1">
+          <p className="text-xs font-bold tracking-widest text-neutral-400 uppercase">PULSE</p>
+          <p className="text-[10px] text-neutral-500 tracking-wider font-medium">
+            {profile.profile_type === 'PERSONAL'
+              ? 'Personal Unified Live Share Experience'
+              : 'Professional Unified Live Share Experience'}
           </p>
-        </div>
+        </footer>
 
       </div>
     </main>
