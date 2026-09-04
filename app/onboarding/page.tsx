@@ -8,21 +8,18 @@ export default function OnboardingIdentityPage() {
   const router = useRouter();
   const [selectedType, setSelectedType] = useState<'PROFESSIONAL' | 'PERSONAL' | null>(null);
 
-  // Inside app/onboarding/page.tsx, update handleSelect:
-const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
-  setSelectedType(type);
-  setTimeout(() => {
-    router.push(`/auth?preset=${type}`);
-  }, 250);
-};
+  const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
+    setSelectedType(type);
+    setTimeout(() => {
+      router.push(`/signup?preset=${type}`);
+    }, 250);
+  };
 
   return (
     <main className="min-h-screen bg-black text-white font-sans selection:bg-neutral-800 flex flex-col justify-between p-6 relative overflow-hidden">
       
-      {/* Background Ambient Blur */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-neutral-900/40 rounded-full blur-[140px] pointer-events-none -z-10" />
 
-      {/* Header */}
       <header className="w-full max-w-xl mx-auto flex items-center justify-between pt-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-7 h-7 bg-white text-black rounded-lg flex items-center justify-center font-bold text-sm">
@@ -35,7 +32,6 @@ const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
         </span>
       </header>
 
-      {/* Main Selection Area */}
       <div className="w-full max-w-xl mx-auto my-auto py-10 space-y-8">
         
         <div className="text-center space-y-2">
@@ -43,14 +39,12 @@ const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
             Choose Your Identity
           </h1>
           <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
-            Select how you want to present yourself. You can add or toggle between both identities anytime inside your dashboard.
+            Select how you want to present yourself. You can toggle or add profiles anytime inside your command dashboard.
           </p>
         </div>
 
-        {/* Identity Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
-          {/* Professional Option */}
           <button
             onClick={() => handleSelect('PROFESSIONAL')}
             className={`p-6 bg-neutral-950 border rounded-3xl text-left transition-all duration-200 relative group flex flex-col justify-between h-64 ${
@@ -66,7 +60,7 @@ const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
               <div>
                 <h2 className="text-lg font-bold text-white tracking-tight">Professional</h2>
                 <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Engineered for networking, career portfolios, downloadable vCards, and client payment QRs.
+                  Engineered for career portfolios, downloadable vCards, and client payment QRs.
                 </p>
               </div>
             </div>
@@ -77,7 +71,6 @@ const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
             </div>
           </button>
 
-          {/* Personal Option */}
           <button
             onClick={() => handleSelect('PERSONAL')}
             className={`p-6 bg-neutral-950 border rounded-3xl text-left transition-all duration-200 relative group flex flex-col justify-between h-64 ${
@@ -93,7 +86,7 @@ const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
               <div>
                 <h2 className="text-lg font-bold text-white tracking-tight">Personal</h2>
                 <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Built for social handles, Instagram/TikTok deep-links, personal GCash, and casual sharing.
+                  Built for social handles, Instagram/TikTok deep links, personal GCash, and casual sharing.
                 </p>
               </div>
             </div>
@@ -108,7 +101,6 @@ const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
 
       </div>
 
-      {/* Footer */}
       <footer className="w-full max-w-xl mx-auto text-center pb-4">
         <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-widest">
           PULSE IDENTITY ENGINE

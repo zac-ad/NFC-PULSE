@@ -4,10 +4,8 @@ export default function MarketingLandingPage() {
   return (
     <main className="min-h-screen bg-black text-white font-sans selection:bg-neutral-800 flex flex-col relative overflow-hidden">
       
-      {/* Ambient Background Gradient */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-800/40 via-neutral-950/20 to-transparent blur-3xl pointer-events-none -z-10" />
 
-      {/* Brand Navigation Header */}
       <header className="w-full max-w-6xl mx-auto px-6 py-6 flex items-center justify-between z-20">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 bg-white text-black rounded-xl flex items-center justify-center font-black text-base shadow-lg group-hover:scale-105 transition-transform">
@@ -24,21 +22,20 @@ export default function MarketingLandingPage() {
 
         <div className="flex items-center gap-3">
           <Link 
-            href="/auth" 
+            href="/login" 
             className="px-4 py-2 text-xs font-semibold text-neutral-300 hover:text-white transition-colors"
           >
-            Sign In
+            Log In
           </Link>
           <Link 
             href="/onboarding" 
             className="px-4 py-2 text-xs font-bold bg-white text-black rounded-full hover:bg-neutral-200 transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
           >
-            Get Started
+            Sign Up
           </Link>
         </div>
       </header>
 
-      {/* Hero Section */}
       <section className="flex-1 flex flex-col items-center justify-center text-center px-6 pt-16 pb-24 z-10 max-w-4xl mx-auto">
         <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full border border-neutral-800 bg-neutral-950/80 backdrop-blur-md shadow-inner">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -74,7 +71,6 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      {/* Hardware Card Showcase */}
       <section id="hardware" className="w-full max-w-5xl mx-auto px-6 py-12 z-10">
         <div className="bg-neutral-950 border border-neutral-800/80 rounded-3xl p-8 md:p-12 backdrop-blur-xl relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="space-y-4 max-w-md">
@@ -89,7 +85,6 @@ export default function MarketingLandingPage() {
             </div>
           </div>
 
-          {/* Physical Card Graphic */}
           <div className="w-full max-w-xs aspect-[1.586/1] bg-gradient-to-br from-neutral-900 via-neutral-950 to-black border border-neutral-800 rounded-2xl p-6 shadow-2xl flex flex-col justify-between relative group hover:border-neutral-700 transition-all">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-1.5">
@@ -106,7 +101,6 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      {/* Features Grid */}
       <section id="features" className="w-full max-w-5xl mx-auto px-6 py-16 z-10">
         <div className="text-center space-y-2 mb-12">
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Engineered for Performance</h2>
@@ -140,7 +134,6 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      {/* How It Works */}
       <section id="how-it-works" className="w-full max-w-5xl mx-auto px-6 py-16 border-t border-neutral-900/80 z-10">
         <div className="text-center space-y-2 mb-12">
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Three Steps to Connect</h2>
@@ -165,13 +158,12 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      {/* Minimal Marketing Footer */}
       <footer className="w-full border-t border-neutral-900 py-8 z-10 mt-auto">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-neutral-500 font-medium gap-4">
           <p>© {new Date().getFullYear()} PULSE. All rights reserved.</p>
           <div className="flex gap-6">
-            <Link href="/auth" className="hover:text-neutral-300 transition-colors">Sign In</Link>
-            <Link href="/onboarding" className="hover:text-neutral-300 transition-colors">Get Started</Link>
+            <Link href="/login" className="hover:text-neutral-300 transition-colors">Log In</Link>
+            <Link href="/onboarding" className="hover:text-neutral-300 transition-colors">Sign Up</Link>
             <Link href="/activate" className="hover:text-neutral-300 transition-colors">Activate Pass</Link>
           </div>
         </div>
