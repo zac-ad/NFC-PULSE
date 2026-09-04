@@ -8,13 +8,13 @@ export default function OnboardingIdentityPage() {
   const router = useRouter();
   const [selectedType, setSelectedType] = useState<'PROFESSIONAL' | 'PERSONAL' | null>(null);
 
-  const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
-    setSelectedType(type);
-    // Route to auth/login with the chosen identity preset
-    setTimeout(() => {
-      router.push(`/dashboard?preset=${type}`);
-    }, 250);
-  };
+  // Inside app/onboarding/page.tsx, update handleSelect:
+const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
+  setSelectedType(type);
+  setTimeout(() => {
+    router.push(`/auth?preset=${type}`);
+  }, 250);
+};
 
   return (
     <main className="min-h-screen bg-black text-white font-sans selection:bg-neutral-800 flex flex-col justify-between p-6 relative overflow-hidden">
