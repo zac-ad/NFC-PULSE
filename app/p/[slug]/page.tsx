@@ -57,6 +57,65 @@ const resolveDeepLink = (urlStr: string) => {
   return cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`;
 };
 
+const renderPlatformIcon = (title: string, url: string) => {
+  const combined = `${title} ${url}`.toLowerCase();
+
+  if (combined.includes('instagram')) {
+    return (
+      <svg className="w-5 h-5 fill-current text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24">
+        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+      </svg>
+    );
+  }
+
+  if (combined.includes('linkedin')) {
+    return (
+      <svg className="w-5 h-5 fill-current text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24">
+        <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+      </svg>
+    );
+  }
+
+  if (combined.includes('whatsapp')) {
+    return (
+      <svg className="w-5 h-5 fill-current text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24">
+        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.285-.143-1.688-.833-1.948-.928-.26-.095-.45-.143-.639.143-.19.285-.737.928-.903 1.118-.166.19-.333.214-.618.071-.285-.143-1.204-.444-2.293-1.415-.848-.756-1.42-1.689-1.586-1.974-.166-.285-.018-.439.125-.581.129-.128.285-.333.428-.5.143-.167.19-.285.285-.476.095-.19.048-.357-.024-.5-.071-.143-.639-1.541-.876-2.11-.231-.555-.466-.48-.639-.488-.165-.008-.356-.008-.547-.008s-.5.071-.761.357c-.261.285-.998.975-.998 2.38 0 1.404 1.022 2.76 1.165 2.951.143.19 2.012 3.073 4.875 4.31.681.294 1.213.47 1.627.601.684.217 1.307.186 1.8.113.55-.082 1.688-.69 1.926-1.356.237-.666.237-1.237.166-1.356-.07-.119-.26-.19-.545-.333z"/>
+      </svg>
+    );
+  }
+
+  if (combined.includes('twitter') || combined.includes('x.com')) {
+    return (
+      <svg className="w-5 h-5 fill-current text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+    );
+  }
+
+  if (combined.includes('facebook')) {
+    return (
+      <svg className="w-5 h-5 fill-current text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24">
+        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+      </svg>
+    );
+  }
+
+  if (combined.includes('github')) {
+    return (
+      <svg className="w-5 h-5 fill-current text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+      </svg>
+    );
+  }
+
+  // Default Globe Web Icon
+  return (
+    <svg className="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m6 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+    </svg>
+  );
+};
+
 export default function PublicProfilePage() {
   const params = useParams();
   const slug = params?.slug as string;
@@ -157,7 +216,6 @@ END:VCARD`;
 
         {/* Hero Card Header */}
         <div className="bg-neutral-950 border border-neutral-800/80 rounded-3xl overflow-hidden shadow-2xl relative text-center">
-          {/* Increased Banner Height (+5%) and Image Scale */}
           <div className="h-[135px] bg-neutral-900 w-full relative overflow-hidden">
             {profile.banner_url && (
               <img
@@ -169,7 +227,6 @@ END:VCARD`;
           </div>
 
           <div className="px-6 pb-6 pt-0 relative flex flex-col items-center">
-            {/* Avatar with Ring */}
             <div className="-mt-14 mb-3 w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-2xl relative">
               {profile.avatar_url ? (
                 <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
@@ -180,7 +237,6 @@ END:VCARD`;
               )}
             </div>
 
-            {/* Name & Badge */}
             <div className="space-y-1">
               <div className="flex items-center justify-center gap-1.5">
                 <h1 className="text-xl font-bold text-white tracking-tight">{profile.full_name}</h1>
@@ -202,7 +258,6 @@ END:VCARD`;
               )}
             </div>
 
-            {/* Quick Contact Action Circles */}
             <div className="flex items-center justify-center gap-3.5 mt-5">
               {profile.phone && (
                 <a
@@ -239,7 +294,6 @@ END:VCARD`;
               )}
             </div>
 
-            {/* Save to Contacts Button */}
             <div className="w-full mt-4">
               <button
                 onClick={generateVCard}
@@ -254,7 +308,7 @@ END:VCARD`;
           </div>
         </div>
 
-        {/* Links Section */}
+        {/* Links Section with Platform Icons */}
         {socialLinks.length > 0 && (
           <div className="space-y-2">
             <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider px-1">Links</p>
@@ -267,9 +321,12 @@ END:VCARD`;
                   rel="noreferrer"
                   className="flex items-center justify-between p-3.5 bg-neutral-950 hover:bg-neutral-900/80 border border-neutral-800/80 hover:border-neutral-700 rounded-2xl transition-all group shadow-sm"
                 >
-                  <span className="font-semibold text-sm text-neutral-200 group-hover:text-white transition-colors">
-                    {link.title}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {renderPlatformIcon(link.title, link.url)}
+                    <span className="font-semibold text-sm text-neutral-200 group-hover:text-white transition-colors">
+                      {link.title}
+                    </span>
+                  </div>
                   <svg className="w-4 h-4 text-neutral-500 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
                   </svg>
