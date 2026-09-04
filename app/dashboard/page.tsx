@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 interface LinkItem {
@@ -31,7 +32,10 @@ interface ProfileData {
   profile_type: 'PROFESSIONAL' | 'PERSONAL';
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const presetParam = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
+
   const [loading, setLoading] = useState(false);
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,7 +46,7 @@ export default function DashboardPage() {
   const [searchEmail, setSearchEmail] = useState('');
   const [userAccount, setUserAccount] = useState<any>(null);
   const [profiles, setProfiles] = useState<ProfileData[]>([]);
-  const [activeTab, setActiveTab] = useState<'PROFESSIONAL' | 'PERSONAL'>('PROFESSIONAL');
+  const [activeTab, setActiveTab] = useState<'PROFESSIONAL' | 'PERSONAL'>(presetParam);
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
@@ -133,7 +137,7 @@ export default function DashboardPage() {
           email: cleanEmail,
           full_name: 'Isaac Salasiban',
           slug: `isaac-${Date.now().toString().slice(-4)}`,
-          profile_type: 'PROFESSIONAL',
+          profile_type: presetParam,
         })
         .select()
         .single();
@@ -143,7 +147,7 @@ export default function DashboardPage() {
 
     setProfiles(fetchedProfiles);
 
-    const targetProf = fetchedProfiles.find((p) => p.profile_type === activeTab) || fetchedProfiles[0];
+    const targetProf = fetchedProfiles.find((p) => p.profile_type === presetParam) || fetchedProfiles[0];
     if (targetProf) {
       selectProfileToEdit(targetProf);
     }
@@ -263,7 +267,7 @@ export default function DashboardPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email: searchEmail,
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard?preset=${activeTab}` : undefined,
       },
     });
 
@@ -834,5 +838,13 @@ export default function DashboardPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-neutral-500 text-xs">Loading command center...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }
