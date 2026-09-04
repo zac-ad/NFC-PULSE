@@ -38,7 +38,7 @@ function ActivateContent() {
     try {
       const cleanEmail = email.trim().toLowerCase();
       const cleanCode = cardCode.trim().toUpperCase();
-      const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
+      let cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
 
       const { data: card, error: cardError } = await supabase
         .from('hardware_cards')
@@ -80,7 +80,29 @@ function ActivateContent() {
 
       let targetProfileId = existingProfile?.id;
 
-      if (!existingProfile) {
+      if (existingProfile) {
+        await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName,
+            email: cleanEmail,
+          })
+          .eq('id', existingProfile.id);
+      } else {
+        const { data: slugOwner } = await supabase
+          .from('profiles')
+          .select('id, account_id')
+          .eq('slug', cleanSlug)
+          .maybeSingle();
+
+        if (slugOwner) {
+          if (slugOwner.account_id === account.id) {
+            cleanSlug = `${cleanSlug}-${profileType.toLowerCase()}`;
+          } else {
+            throw new Error(`The slug "${cleanSlug}" is already taken by another user. Please choose a unique slug.`);
+          }
+        }
+
         const { data: newProfile, error: profErr } = await supabase
           .from('profiles')
           .insert({
@@ -94,12 +116,7 @@ function ActivateContent() {
           .select()
           .single();
 
-        if (profErr) {
-          if (profErr.message.includes('slug')) {
-            throw new Error('This profile slug is already taken. Please choose another one.');
-          }
-          throw profErr;
-        }
+        if (profErr) throw profErr;
         targetProfileId = newProfile.id;
       }
 
@@ -113,19 +130,9 @@ function ActivateContent() {
 
       if (bindError) throw bindError;
 
-      try {
-        await fetch('/api/send-welcome', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, name: fullName, slug: cleanSlug, cardCode: cleanCode }),
-        });
-      } catch {
-        console.warn('Welcome email trigger skipped.');
-      }
-
       setMessage({
         type: 'success',
-        text: `Hardware pass successfully linked to your ${profileType} profile! Redirecting to dashboard...`,
+        text: `Hardware pass successfully linked to your ${profileType} profile (${cleanSlug})! Redirecting...`,
       });
 
       setTimeout(() => {
@@ -263,7 +270,7 @@ function ActivateContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-white/20 disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 mt-2"
+            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg disabled:opacity-50 mt-2"
           >
             {loading ? 'Activating Pass...' : 'Claim & Activate Hardware Pass'}
           </button>
