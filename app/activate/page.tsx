@@ -38,7 +38,7 @@ function ActivateContent() {
     try {
       const cleanEmail = email.trim().toLowerCase();
       const cleanCode = cardCode.trim().toUpperCase();
-      let cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
+      const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
 
       const { data: card, error: cardError } = await supabase
         .from('hardware_cards')
@@ -71,60 +71,35 @@ function ActivateContent() {
         account = newAccount;
       }
 
-      let { data: existingProfile } = await supabase
+      // Upsert profile matching on email to bypass unique constraint conflicts during reactivation
+      const { data: profile, error: profErr } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('account_id', account.id)
-        .eq('profile_type', profileType)
-        .maybeSingle();
-
-      let targetProfileId = existingProfile?.id;
-
-      if (existingProfile) {
-        await supabase
-          .from('profiles')
-          .update({
-            full_name: fullName,
-            email: cleanEmail,
-          })
-          .eq('id', existingProfile.id);
-      } else {
-        const { data: slugOwner } = await supabase
-          .from('profiles')
-          .select('id, account_id')
-          .eq('slug', cleanSlug)
-          .maybeSingle();
-
-        if (slugOwner) {
-          if (slugOwner.account_id === account.id) {
-            cleanSlug = `${cleanSlug}-${profileType.toLowerCase()}`;
-          } else {
-            throw new Error(`The slug "${cleanSlug}" is already taken by another user. Please choose a unique slug.`);
-          }
-        }
-
-        const { data: newProfile, error: profErr } = await supabase
-          .from('profiles')
-          .insert({
+        .upsert(
+          {
             account_id: account.id,
             email: cleanEmail,
             full_name: fullName,
             slug: cleanSlug,
             profile_type: profileType,
             is_active: true,
-          })
-          .select()
-          .single();
+          },
+          { onConflict: 'email' }
+        )
+        .select()
+        .single();
 
-        if (profErr) throw profErr;
-        targetProfileId = newProfile.id;
+      if (profErr) {
+        if (profErr.message.includes('slug')) {
+          throw new Error('This profile slug is already taken. Please choose another one.');
+        }
+        throw profErr;
       }
 
       const { error: bindError } = await supabase
         .from('hardware_cards')
         .update({
           status: 'ACTIVE',
-          profile_id: targetProfileId,
+          profile_id: profile.id,
         })
         .eq('id', card.id);
 
@@ -132,7 +107,7 @@ function ActivateContent() {
 
       setMessage({
         type: 'success',
-        text: `Hardware pass successfully linked to your ${profileType} profile (${cleanSlug})! Redirecting...`,
+        text: `Hardware pass successfully linked! Redirecting to dashboard...`,
       });
 
       setTimeout(() => {
@@ -286,4 +261,6 @@ export default function ActivatePage() {
       <ActivateContent />
     </Suspense>
   );
-}
+}git add app/activate/page.tsx
+git commit -m "fix: use upsert on email constraint to allow profile reactivation"
+git push origin main
