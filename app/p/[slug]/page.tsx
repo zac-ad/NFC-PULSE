@@ -119,7 +119,7 @@ END:VCARD`;
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-neutral-950 border border-neutral-800/50 rounded-3xl p-6 space-y-6">
-          <div className="w-full h-32 bg-neutral-900 rounded-2xl animate-pulse" />
+          <div className="w-full h-[135px] bg-neutral-900 rounded-2xl animate-pulse" />
           <div className="flex justify-center -mt-14">
             <div className="w-24 h-24 bg-neutral-800 rounded-full border-4 border-black animate-pulse" />
           </div>
@@ -157,9 +157,14 @@ END:VCARD`;
 
         {/* Hero Card Header */}
         <div className="bg-neutral-950 border border-neutral-800/80 rounded-3xl overflow-hidden shadow-2xl relative text-center">
-          <div className="h-32 bg-neutral-900 w-full relative overflow-hidden">
+          {/* Increased Banner Height (+5%) and Image Scale */}
+          <div className="h-[135px] bg-neutral-900 w-full relative overflow-hidden">
             {profile.banner_url && (
-              <img src={profile.banner_url} alt="Banner" className="w-full h-full object-cover" />
+              <img
+                src={profile.banner_url}
+                alt="Banner"
+                className="w-full h-full object-cover scale-105 transition-transform duration-300"
+              />
             )}
           </div>
 
@@ -197,7 +202,7 @@ END:VCARD`;
               )}
             </div>
 
-            {/* Quick Contact Action Circles (SVG Icons) */}
+            {/* Quick Contact Action Circles */}
             <div className="flex items-center justify-center gap-3.5 mt-5">
               {profile.phone && (
                 <a
@@ -234,7 +239,7 @@ END:VCARD`;
               )}
             </div>
 
-            {/* Primary Action Button (Save to Contacts) */}
+            {/* Save to Contacts Button */}
             <div className="w-full mt-4">
               <button
                 onClick={generateVCard}
@@ -274,7 +279,7 @@ END:VCARD`;
           </div>
         )}
 
-        {/* Collapsible QR Codes Section */}
+        {/* QR Codes Section */}
         {qrCodes.length > 0 && (
           <div className="space-y-2">
             <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider px-1">QR Codes</p>
@@ -293,7 +298,7 @@ END:VCARD`;
                       </svg>
                     </button>
                     {isOpen && (
-                      <div className="p-4 border-t border-neutral-900 bg-neutral-900/40 flex flex-col items-center gap-2 animate-fadeIn">
+                      <div className="p-4 border-t border-neutral-900 bg-neutral-900/40 flex flex-col items-center gap-2">
                         <img src={qr.url} alt={qr.title} className="w-48 h-48 object-cover rounded-xl bg-white p-2 shadow-xl" />
                         <p className="text-xs text-neutral-400 font-medium">{qr.title}</p>
                       </div>
@@ -305,7 +310,7 @@ END:VCARD`;
           </div>
         )}
 
-        {/* PULSE Footer */}
+        {/* Footer */}
         <footer className="text-center pt-4 pb-2 space-y-3">
           <a
             href="/activate"
