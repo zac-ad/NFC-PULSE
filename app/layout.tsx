@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: {
-    default: 'PULSE | NFC Digital Business Card',
-    template: '%s | PULSE',
+export const metadata = {
+  title: 'PULSE | Unified Live Share Experience',
+  description: 'Tap to view my digital business card and contact information.',
+  openGraph: {
+    title: 'PULSE | Unified Live Share Experience',
+    description: 'Tap to view my digital business card and contact information.',
+    type: 'website',
   },
-  description: 'Next-generation NFC digital business card and fleet management system.',
 };
 
 export default function RootLayout({

@@ -116,8 +116,19 @@ END:VCARD`;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-neutral-500 text-xs">
-        Loading identity...
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-neutral-950 border border-neutral-800/50 rounded-3xl p-6 space-y-6">
+          <div className="w-full h-32 bg-neutral-900 rounded-2xl animate-pulse"></div>
+          <div className="flex justify-between items-end -mt-12 px-4">
+             <div className="w-20 h-20 bg-neutral-800 rounded-full border-4 border-neutral-950 animate-pulse"></div>
+             <div className="w-28 h-9 bg-neutral-900 rounded-xl animate-pulse"></div>
+          </div>
+          <div className="space-y-3 pt-4 px-4">
+             <div className="h-5 bg-neutral-900 rounded-md w-3/4 animate-pulse"></div>
+             <div className="h-4 bg-neutral-900 rounded-md w-1/2 animate-pulse"></div>
+             <div className="h-16 bg-neutral-900 rounded-md w-full animate-pulse mt-4"></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -154,21 +165,26 @@ END:VCARD`;
           </div>
           <div className="px-6 pb-6 pt-0 relative">
             <div className="-mt-12 mb-4 flex justify-between items-end">
-              <div className="w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-xl">
-                {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-neutral-600">
-                    {profile.full_name[0]}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={generateVCard}
-                className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl hover:bg-neutral-200 transition-all shadow-lg"
-              >
-                Save Contact
-              </button>
+              <div className="relative group">
+    {/* The Ambient Glow */}
+  <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-60"></div>
+  {/* The Avatar */}
+  <div className="relative w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-2xl z-10">
+    {profile.avatar_url ? (
+      <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
+    ) : (
+      <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-neutral-600">
+        {profile.full_name[0]}
+      </div>
+    )}
+  </div>
+  </div>
+          <button
+          onClick={generateVCard}
+            className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] z-10"
+            >
+            Save Contact
+        </button>
             </div>
 
             <div className="space-y-1">
