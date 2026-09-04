@@ -44,7 +44,6 @@ export default function DashboardPage() {
   const [profiles, setProfiles] = useState<ProfileData[]>([]);
   const [activeTab, setActiveTab] = useState<'PROFESSIONAL' | 'PERSONAL'>('PROFESSIONAL');
 
-  // Active Profile State Fields
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [title, setTitle] = useState('');
@@ -57,12 +56,10 @@ export default function DashboardPage() {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
-  // Card & Tap Data
   const [assignedCardCode, setAssignedCardCode] = useState<string | null>(null);
   const [tapCount, setTapCount] = useState<number>(0);
   const [recentTaps, setRecentTaps] = useState<TapEvent[]>([]);
 
-  // Links & QRs
   const [items, setItems] = useState<LinkItem[]>([]);
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
@@ -72,7 +69,7 @@ export default function DashboardPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    document.title = 'Dashboard | PULSE';
+    document.title = 'PULSE | Dashboard';
     checkSessionAndLoad();
   }, []);
 
@@ -168,7 +165,7 @@ export default function DashboardPage() {
     setBannerUrl(prof.banner_url || '');
     setIsActive(prof.is_active ?? true);
 
-    document.title = `${prof.full_name || 'Dashboard'} (${prof.profile_type}) | PULSE`;
+    document.title = `PULSE | Dashboard - ${prof.full_name || prof.profile_type}`;
 
     const { data: profileItems } = await supabase
       .from('profile_links')
@@ -424,7 +421,6 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center font-sans">
       <div className="max-w-2xl w-full space-y-6">
         
-        {/* Dynamic PULSE Branding Header */}
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">PULSE Command</h1>
@@ -485,7 +481,6 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-6">
 
-            {/* Profile Mode Switcher Tabs */}
             <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-1.5 border border-neutral-800 rounded-2xl shadow-lg">
               <button
                 onClick={() => handleTabSwitch('PROFESSIONAL')}
@@ -509,7 +504,6 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Instant Privacy Toggle Card */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 flex items-center justify-between shadow-xl">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -537,7 +531,6 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Assigned Card Status Banner */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4 flex items-center justify-between text-xs shadow-md">
               <div className="space-y-0.5">
                 <p className="text-neutral-400 font-medium">Assigned Hardware Pass</p>
@@ -553,7 +546,6 @@ export default function DashboardPage() {
               </a>
             </div>
 
-            {/* Tap Analytics */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300">{activeTab} Card Telemetry</h2>
@@ -578,7 +570,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Profile Customization Form */}
             <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
                 <h2 className="text-base font-bold text-white">{activeTab} Identity Details</h2>
@@ -712,13 +703,12 @@ export default function DashboardPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50"
+                className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg disabled:opacity-50"
               >
                 {saving ? 'Saving Profile...' : `Save ${activeTab} Card Changes`}
               </button>
             </form>
 
-            {/* Links & QR Management */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-base font-bold text-white">{activeTab} Social Links</h2>
 
@@ -770,7 +760,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Payment QRs */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-base font-bold text-white">{activeTab} Payment QRs</h2>
 

@@ -18,7 +18,7 @@ function ActivateContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    document.title = 'Activate Hardware Pass | PULSE';
+    document.title = 'PULSE | Activate';
     const codeParam = searchParams.get('code');
     if (codeParam) {
       setCardCode(codeParam.toUpperCase().trim());
@@ -263,7 +263,7 @@ function ActivateContent() {
           <button
             type="submit"
             disabled={loading}
-              className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-white/20 disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 mt-2"
+            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-white/20 disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 mt-2"
           >
             {loading ? 'Activating Pass...' : 'Claim & Activate Hardware Pass'}
           </button>

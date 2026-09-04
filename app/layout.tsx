@@ -1,8 +1,10 @@
-import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata = {
-  title: 'PULSE | Unified Live Share Experience',
+  title: {
+    template: 'PULSE | %s',
+    default: 'PULSE | Unified Live Share Experience',
+  },
   description: 'Tap to view my digital business card and contact information.',
   openGraph: {
     title: 'PULSE | Unified Live Share Experience',

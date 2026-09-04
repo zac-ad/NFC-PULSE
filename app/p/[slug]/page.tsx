@@ -79,7 +79,7 @@ export default function PublicProfilePage() {
 
     if (profData) {
       setProfile(profData);
-      document.title = `${profData.full_name} | PULSE`;
+      document.title = `PULSE | ${profData.full_name}`;
 
       const { data: linkData } = await supabase
         .from('profile_links')
@@ -156,7 +156,6 @@ END:VCARD`;
     <main className="min-h-screen bg-black text-white p-4 flex justify-center font-sans selection:bg-neutral-800">
       <div className="max-w-md w-full space-y-6 my-auto py-6">
         
-        {/* Banner & Avatar Profile Card */}
         <div className="bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl relative">
           <div className="h-32 bg-neutral-900 w-full relative">
             {profile.banner_url && (
@@ -166,25 +165,23 @@ END:VCARD`;
           <div className="px-6 pb-6 pt-0 relative">
             <div className="-mt-12 mb-4 flex justify-between items-end">
               <div className="relative group">
-    {/* The Ambient Glow */}
-  <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-60"></div>
-  {/* The Avatar */}
-  <div className="relative w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-2xl z-10">
-    {profile.avatar_url ? (
-      <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
-    ) : (
-      <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-neutral-600">
-        {profile.full_name[0]}
-      </div>
-    )}
-  </div>
-  </div>
-          <button
-          onClick={generateVCard}
-            className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] z-10"
-            >
-            Save Contact
-        </button>
+                <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-60"></div>
+                <div className="relative w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-2xl z-10">
+                  {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-neutral-600">
+                      {profile.full_name[0]}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={generateVCard}
+                className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] z-10"
+              >
+                Save Contact
+              </button>
             </div>
 
             <div className="space-y-1">
@@ -199,7 +196,6 @@ END:VCARD`;
           </div>
         </div>
 
-        {/* Links */}
         {socialLinks.length > 0 && (
           <div className="space-y-2">
             {socialLinks.map((link) => (
@@ -217,7 +213,6 @@ END:VCARD`;
           </div>
         )}
 
-        {/* Payment QRs */}
         {qrCodes.length > 0 && (
           <div className="bg-neutral-950 border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Payment Gateways</h2>
@@ -232,7 +227,6 @@ END:VCARD`;
           </div>
         )}
 
-        {/* Dynamic PULSE Branding Footer */}
         <footer className="text-center pt-8 pb-6 border-t border-neutral-900 mt-8 space-y-1">
           <p className="text-xs font-bold tracking-widest text-neutral-400 uppercase">PULSE</p>
           <p className="text-[10px] text-neutral-500 tracking-wider font-medium">
