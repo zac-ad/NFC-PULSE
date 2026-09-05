@@ -1,185 +1,94 @@
+// app/portal/personal/login/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-interface Profile {
-  id: string;
-  full_name: string;
-  title: string;
-  company: string;
-  bio: string;
-  email: string;
-  slug: string;
-  is_active: boolean;
-}
+export default function PersonalLoginPage() {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const router = useRouter();
 
-interface LinkItem {
-  id: string;
-  title: string;
-  url: string;
-  type: 'link' | 'qr';
-}
-
-export default function PersonalDashboard() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [links, setLinks] = useState<LinkItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newTitle, setNewTitle] = useState('');
-  const [newUrl, setNewUrl] = useState('');
-
-  useEffect(() => {
-    fetchPersonalData();
-  }, []);
-
-  const fetchPersonalData = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const userEmail = session?.user?.email;
+    setMessage('');
 
-    if (!userEmail) {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email.trim().toLowerCase())
+      .eq('profile_type', 'PERSONAL')
+      .maybeSingle();
+
+    if (error || !profile) {
+      setMessage('No personal profile found for this email address.');
       setLoading(false);
       return;
     }
 
-    const { data: profData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('email', userEmail)
-      .eq('profile_type', 'PERSONAL')
-      .maybeSingle();
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email: email.trim().toLowerCase(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/portal/personal/dashboard`,
+      },
+    });
 
-    if (profData) {
-      setProfile(profData);
-      const { data: linkData } = await supabase
-        .from('profile_links')
-        .select('*')
-        .eq('profile_id', profData.id)
-        .order('position', { ascending: true });
-
-      setLinks(linkData || []);
+    if (authError) {
+      setMessage(authError.message);
+    } else {
+      setMessage('Magic link sent! Check your inbox to sign in.');
     }
     setLoading(false);
   };
 
-  const handleAddLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile || !newTitle || !newUrl) return;
-
-    const { data, error } = await supabase
-      .from('profile_links')
-      .insert({
-        profile_id: profile.id,
-        title: newTitle,
-        url: newUrl,
-        type: 'link',
-        position: links.length,
-      })
-      .select()
-      .single();
-
-    if (!error && data) {
-      setLinks([...links, data]);
-      setNewTitle('');
-      setNewUrl('');
-    }
-  };
-
-  const handleDeleteLink = async (id: string) => {
-    const { error } = await supabase.from('profile_links').delete().eq('id', id);
-    if (!error) {
-      setLinks(links.filter((l) => l.id !== id));
-    }
-  };
-
-  if (loading) {
-    return <div className="min-h-screen bg-black text-white flex items-center justify-center text-xs">Loading Personal Dashboard...</div>;
-  }
-
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="max-w-sm w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-6 text-center space-y-3">
-          <h1 className="text-sm font-bold">Unauthorized Access</h1>
-          <p className="text-xs text-neutral-400">No active personal profile found for this session.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <main className="min-h-screen bg-black text-white p-6 md:p-10 font-sans selection:bg-neutral-800">
-      <div className="max-w-xl mx-auto space-y-6">
-        
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
+    <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-8 space-y-6 shadow-2xl backdrop-blur-xl">
+        <div className="space-y-2 text-center">
+          <span className="text-[10px] font-bold tracking-widest text-neutral-500 uppercase">PULSE CONSUMER</span>
+          <h1 className="text-xl font-bold tracking-tight">Personal Portal</h1>
+          <p className="text-xs text-neutral-400">Sign in to update your personal networking card links.</p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">PERSONAL PORTAL</span>
-            <h1 className="text-xl font-bold tracking-tight">{profile.full_name}</h1>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5">Email Address</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@domain.com"
+              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-neutral-600 text-white placeholder-neutral-600"
+            />
           </div>
-          <a
-            href={`/p/${profile.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="px-4 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-xs font-semibold rounded-xl transition-all"
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3.5 bg-neutral-800 border border-neutral-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-neutral-700 transition-all shadow-xl active:scale-[0.98] disabled:opacity-50"
           >
-            View Live Card ↗
-          </a>
-        </div>
+            {loading ? 'Verifying...' : 'Access Personal Dashboard'}
+          </button>
+        </form>
 
-        {/* Add Link Module */}
-        <div className="bg-neutral-950 border border-neutral-800/80 rounded-2xl p-6 space-y-4 shadow-xl">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-300">Add Personal Link</h2>
-          <form onSubmit={handleAddLink} className="space-y-3">
-            <input
-              type="text"
-              placeholder="Label (e.g. Instagram, Spotify, Personal Site)"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-neutral-600"
-            />
-            <input
-              type="text"
-              placeholder="URL (e.g. instagram.com/handle)"
-              value={newUrl}
-              onChange={(e) => setNewUrl(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-neutral-600"
-            />
-            <button
-              type="submit"
-              className="w-full py-3 bg-neutral-800 border border-neutral-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-neutral-700 transition-all active:scale-[0.98]"
-            >
-              Add Personal Link
-            </button>
-          </form>
-        </div>
+        {message && (
+          <p className="text-xs text-center font-medium text-neutral-300 bg-neutral-900/60 p-3 rounded-xl border border-neutral-800">
+            {message}
+          </p>
+        )}
 
-        {/* Links Manager */}
-        <div className="bg-neutral-950 border border-neutral-800/80 rounded-2xl p-6 space-y-4 shadow-xl">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-300">Active Links ({links.length})</h2>
-          {links.length === 0 ? (
-            <p className="text-xs text-neutral-500 text-center py-4">No links added yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {links.map((link) => (
-                <div key={link.id} className="flex items-center justify-between p-3.5 bg-neutral-900/60 border border-neutral-800 rounded-xl">
-                  <div>
-                    <p className="text-xs font-bold text-white">{link.title}</p>
-                    <p className="text-[11px] text-neutral-400 truncate max-w-xs">{link.url}</p>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteLink(link.id)}
-                    className="text-neutral-500 hover:text-red-400 text-xs font-semibold px-2 py-1 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="text-center pt-2">
+          <p className="text-[11px] text-neutral-500">
+            Looking for a professional badge?{' '}
+            <a href="/portal/professional/login" className="text-sky-400 hover:underline">
+              Switch to Professional Portal
+            </a>
+          </p>
         </div>
-
       </div>
     </main>
   );
