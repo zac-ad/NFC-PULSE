@@ -7,9 +7,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(
   request: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
-  const slug = params.slug?.toLowerCase();
+  const resolvedParams = await params;
+  const slug = resolvedParams.slug?.toLowerCase();
 
   if (!slug) {
     return new NextResponse('Profile slug missing', { status: 400 });
@@ -25,7 +26,6 @@ export async function GET(
     return new NextResponse('Profile not found', { status: 404 });
   }
 
-  // Construct standard vCard 3.0 string
   const vcardLines = [
     'BEGIN:VCARD',
     'VERSION:3.0',
