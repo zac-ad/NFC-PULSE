@@ -200,15 +200,16 @@ export default function PublicProfilePage() {
           <div className="w-12 h-12 bg-neutral-900 border border-neutral-800 text-red-400 rounded-2xl flex items-center justify-center mx-auto text-xl">
             🔒
           </div>
-          <h1 className="text-lg font-bold text-white">Profile Locked</h1>
+          <h1 className="text-lg font-bold text-white">Profile Private</h1>
           <p className="text-xs text-neutral-400">
-            This card is currently set to private by its owner.
+            This card is currently disabled by its owner.
           </p>
         </div>
       </div>
     );
   }
 
+  const isPro = profile.profile_type === 'PROFESSIONAL';
   const socialLinks = links.filter((l) => l.type !== 'qr');
   const qrCodes = links.filter((l) => l.type === 'qr');
 
@@ -216,7 +217,7 @@ export default function PublicProfilePage() {
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 via-black to-black text-white p-4 flex justify-center font-sans selection:bg-neutral-800">
       <div className="max-w-md w-full space-y-5 my-auto py-4">
 
-        {/* Hero Matte-Black Card */}
+        {/* Hero Card */}
         <div className="bg-neutral-950/90 border border-neutral-800/80 rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.8)] backdrop-blur-xl relative text-center">
           
           {/* Header Share Button */}
@@ -257,15 +258,17 @@ export default function PublicProfilePage() {
               )}
             </div>
 
+            {/* Profile Identity Indicator */}
+            <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-0.5 rounded-full border mb-2 ${
+              isPro ? 'text-sky-400 border-sky-900/50 bg-sky-950/30' : 'text-emerald-400 border-emerald-900/50 bg-emerald-950/30'
+            }`}>
+              {profile.profile_type} CARD
+            </span>
+
             {/* Name & Title */}
             <div className="space-y-1">
               <div className="flex items-center justify-center gap-1.5">
                 <h1 className="text-xl font-bold text-white tracking-tight">{profile.full_name}</h1>
-                <span className="w-4 h-4 bg-sky-500 text-black rounded-full flex items-center justify-center shadow-sm">
-                  <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 20 20">
-                    <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
-                  </svg>
-                </span>
               </div>
               {(profile.title || profile.company) && (
                 <p className="text-xs text-neutral-400 font-medium">
@@ -316,7 +319,7 @@ export default function PublicProfilePage() {
               )}
             </div>
 
-            {/* Main Action Button (vCard API Route Integration) */}
+            {/* Main Action Button */}
             <div className="w-full mt-4">
               <a
                 href={`/api/vcard/${profile.slug}`}
@@ -392,17 +395,8 @@ export default function PublicProfilePage() {
 
         {/* Footer */}
         <footer className="text-center pt-4 pb-2 space-y-3">
-          <a
-            href="/activate"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-950/90 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900 text-neutral-300 text-[11px] font-semibold rounded-full transition-all shadow-sm active:scale-95 backdrop-blur-md"
-          >
-            <span>Get Your Own Card</span>
-            <svg className="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-            </svg>
-          </a>
           <p className="text-[10px] font-bold tracking-widest text-neutral-600 uppercase">
-            POWERED BY PULSE
+            POWERED BY PULSE ⚡
           </p>
         </footer>
 
