@@ -176,28 +176,6 @@ export default function PublicProfilePage() {
     }
   };
 
-  const generateVCard = () => {
-    if (!profile) return;
-    const vcard = `BEGIN:VCARD
-VERSION:3.0
-FN:${profile.full_name}
-TITLE:${profile.title || ''}
-ORG:${profile.company || ''}
-TEL:${profile.phone || ''}
-EMAIL:${profile.email || ''}
-NOTE:${profile.bio || ''}
-END:VCARD`;
-
-    const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${profile.slug}.vcf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -338,17 +316,17 @@ END:VCARD`;
               )}
             </div>
 
-            {/* Main Action Button */}
+            {/* Main Action Button (vCard API Route Integration) */}
             <div className="w-full mt-4">
-              <button
-                onClick={generateVCard}
+              <a
+                href={`/api/vcard/${profile.slug}`}
                 className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-2xl hover:bg-neutral-200 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-[0.98]"
               >
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                   <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
                 </svg>
                 Save to Contacts
-              </button>
+              </a>
             </div>
           </div>
         </div>
