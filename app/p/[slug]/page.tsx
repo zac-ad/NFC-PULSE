@@ -1,3 +1,4 @@
+// app/p/[slug]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -125,7 +126,8 @@ const renderPlatformIcon = (title: string, url: string) => {
 
 export default function PublicProfilePage() {
   const params = useParams();
-  const slug = params?.slug as string;
+  const rawSlug = params?.slug;
+  const slug = typeof rawSlug === 'string' ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : '';
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
@@ -147,7 +149,7 @@ export default function PublicProfilePage() {
 
     if (profData) {
       setProfile(profData);
-      document.title = `PULSE | ${profData.full_name}`;
+      document.title = `PULSE | ${profData.full_name || 'Card'}`;
 
       const { data: linkData } = await supabase
         .from('profile_links')
@@ -164,8 +166,8 @@ export default function PublicProfilePage() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `PULSE | ${profile?.full_name}`,
-          text: `Connect with ${profile?.full_name} on PULSE`,
+          title: `PULSE | ${profile?.full_name || 'Card'}`,
+          text: `Connect with ${profile?.full_name || 'Card'} on PULSE`,
           url: window.location.href,
         });
       } catch {}
@@ -250,10 +252,10 @@ export default function PublicProfilePage() {
             {/* Avatar Ring */}
             <div className="-mt-14 mb-3 w-24 h-24 rounded-full border-4 border-neutral-950 overflow-hidden bg-neutral-900 shadow-2xl relative group">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                <img src={profile.avatar_url} alt={profile.full_name || 'Avatar'} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-neutral-500">
-                  {profile.full_name[0]}
+                  {profile.full_name?.[0] || 'P'}
                 </div>
               )}
             </div>
