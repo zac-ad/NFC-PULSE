@@ -1,3 +1,4 @@
+// app/page.tsx
 import Link from 'next/link';
 
 export default function MarketingLandingPage() {
@@ -22,13 +23,13 @@ export default function MarketingLandingPage() {
 
         <div className="flex items-center gap-3">
           <Link 
-            href="/login" 
+            href="/portal" 
             className="px-4 py-2 text-xs font-semibold text-neutral-300 hover:text-white transition-colors"
           >
             Log In
           </Link>
           <Link 
-            href="/onboarding" 
+            href="/portal" 
             className="px-4 py-2 text-xs font-bold bg-white text-black rounded-full hover:bg-neutral-200 transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
           >
             Sign Up
@@ -54,7 +55,7 @@ export default function MarketingLandingPage() {
         
         <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
           <Link 
-            href="/onboarding" 
+            href="/portal" 
             className="px-8 py-4 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-2xl hover:bg-neutral-200 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95"
           >
             Create Your Profile
@@ -162,8 +163,8 @@ export default function MarketingLandingPage() {
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-neutral-500 font-medium gap-4">
           <p>© {new Date().getFullYear()} PULSE. All rights reserved.</p>
           <div className="flex gap-6">
-            <Link href="/login" className="hover:text-neutral-300 transition-colors">Log In</Link>
-            <Link href="/onboarding" className="hover:text-neutral-300 transition-colors">Sign Up</Link>
+            <Link href="/portal" className="hover:text-neutral-300 transition-colors">Log In</Link>
+            <Link href="/portal" className="hover:text-neutral-300 transition-colors">Sign Up</Link>
             <Link href="/activate" className="hover:text-neutral-300 transition-colors">Activate Pass</Link>
           </div>
         </div>
