@@ -2,93 +2,64 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export default function ProfessionalLoginPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
 
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('email', email.trim().toLowerCase())
-      .eq('profile_type', 'PROFESSIONAL')
-      .maybeSingle();
+    const origin = window.location.origin;
 
-    if (error || !profile) {
-      setMessage('No professional profile found for this email.');
-      setLoading(false);
-      return;
-    }
-
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
       options: {
-        emailRedirectTo: `${window.location.origin}/portal/professional/dashboard`,
+        emailRedirectTo: `${origin}/dashboard`,
       },
     });
 
-    if (authError) {
-      setMessage(authError.message);
+    if (error) {
+      setMessage('Error sending magic link. Please try again.');
     } else {
-      setMessage('Check your email for the secure magic link access.');
+      setMessage('Magic link sent! Check your email to sign in.');
     }
     setLoading(false);
   };
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-8 space-y-6 shadow-2xl backdrop-blur-xl">
+    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-sans">
+      <div className="w-full max-w-sm space-y-6 bg-neutral-950 border border-neutral-800 p-8 rounded-3xl shadow-2xl">
         <div className="space-y-2 text-center">
-          <span className="text-[10px] font-bold tracking-widest text-neutral-500 uppercase">PULSE ENTERPRISE</span>
-          <h1 className="text-xl font-bold tracking-tight">Professional Portal</h1>
-          <p className="text-xs text-neutral-400">Sign in to manage your corporate card and team links.</p>
+          <span className="text-[10px] font-mono tracking-widest text-sky-400 uppercase">Enterprise Access</span>
+          <h1 className="text-2xl font-bold tracking-tight">Professional Portal</h1>
+          <p className="text-xs text-neutral-400">Enter your email to receive a magic sign-in link.</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5">Work Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-neutral-600 text-white placeholder-neutral-600"
-            />
-          </div>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@company.com"
+            required
+            className="w-full bg-neutral-900 border border-neutral-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-neutral-600"
+          />
+
+          {message && <p className="text-xs text-neutral-300 text-center font-medium">{message}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-neutral-200 transition-all shadow-xl active:scale-[0.98] disabled:opacity-50"
+            className="w-full bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl py-3 hover:bg-neutral-200 transition-all disabled:opacity-50"
           >
-            {loading ? 'Verifying...' : 'Access Professional Dashboard'}
+            {loading ? 'Sending Link...' : 'Send Magic Link'}
           </button>
         </form>
-
-        {message && (
-          <p className="text-xs text-center font-medium text-neutral-300 bg-neutral-900/60 p-3 rounded-xl border border-neutral-800">
-            {message}
-          </p>
-        )}
-
-        <div className="text-center pt-2">
-          <p className="text-[11px] text-neutral-500">
-            Looking for a personal card?{' '}
-            <a href="/portal/personal/login" className="text-emerald-400 hover:underline">
-              Switch to Personal Portal
-            </a>
-          </p>
-        </div>
       </div>
     </main>
   );
