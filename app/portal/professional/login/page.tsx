@@ -13,21 +13,36 @@ export default function ProfessionalLoginPage() {
     setLoading(true);
     setMessage('');
 
+    const formattedEmail = email.trim().toLowerCase();
     const origin = window.location.origin;
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
+    // 1. Resolve or create account row in Supabase 'accounts' table via RPC
+    const { error: rpcError } = await supabase.rpc('get_or_create_account', {
+      target_email: formattedEmail,
+    });
+
+    if (rpcError) {
+      console.error('Account Resolution Error:', rpcError);
+      setMessage(`Error resolving account: ${rpcError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Trigger Magic Link via Supabase Auth
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email: formattedEmail,
       options: {
         emailRedirectTo: `${origin}/dashboard`,
       },
     });
 
-    if (error) {
-      console.error('Supabase OTP Error:', error);
-      setMessage(`Error: ${error.message}`);
+    if (authError) {
+      console.error('Supabase OTP Error:', authError);
+      setMessage(`Error: ${authError.message}`);
     } else {
       setMessage('Magic link sent! Check your email to sign in.');
     }
+
     setLoading(false);
   };
 
