@@ -1,26 +1,23 @@
+import type { Metadata } from 'next';
 import './globals.css';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: {
     template: 'PULSE | %s',
-    default: 'PULSE | Unified Live Share Experience',
+    default: 'PULSE — Business cards were made for paper.',
   },
-  description: 'Tap to view my digital business card and contact information.',
+  description: 'A living identity you carry in your wallet. One tap turns a physical interaction into a lasting digital connection.',
   openGraph: {
-    title: 'PULSE | Unified Live Share Experience',
-    description: 'Tap to view my digital business card and contact information.',
+    title: 'PULSE — Business cards were made for paper.',
+    description: 'A living identity you carry in your wallet.',
     type: 'website',
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-black text-white antialiased">{children}</body>
+      <body className="bg-void text-paper antialiased">{children}</body>
     </html>
   );
 }
