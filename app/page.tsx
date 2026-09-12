@@ -54,7 +54,7 @@ function PulseCard({
           <p className={`font-serif text-sm leading-tight ${isPro ? 'text-white' : 'text-black'}`}>
             {isPro ? 'Isaac Salasiban' : 'Isaac'}
           </p>
-          {isPro && <p className="text-[11px] mt-0.5 text-white/40">Systems Architect</p>}
+          {isPro && <p className="text-[11px] mt-0.5 text-white/40">Founder</p>}
         </div>
       </div>
     </div>
@@ -237,7 +237,7 @@ export default function LandingPage() {
                             {identity === 'pro' ? 'Isaac Salasiban' : 'Isaac'}
                           </p>
                           <p className="text-[11px] text-white/40 mt-0.5">
-                            {identity === 'pro' ? 'Systems Architect' : 'Personal'}
+                            {identity === 'pro' ? 'Founder' : 'Personal'}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-1">
                             {profileLinks[identity].map(l => (
@@ -307,7 +307,7 @@ export default function LandingPage() {
                         {identity === 'pro' ? 'Isaac Salasiban' : 'Isaac'}
                       </p>
                       {identity === 'pro' && (
-                        <p className="text-[13px] text-white/40 mt-1">Systems Architect</p>
+                        <p className="text-[13px] text-white/40 mt-1">Founder</p>
                       )}
                     </div>
                     <PulseCard mode={identity} size="sm" />
@@ -405,7 +405,7 @@ export default function LandingPage() {
                   <div className="w-10 h-10 rounded-full bg-white/10" />
                   <div>
                     <p className="font-serif text-sm text-white">Isaac Salasiban</p>
-                    <p className="text-[11px] text-white/40">Systems Architect</p>
+                    <p className="text-[11px] text-white/40">Founder</p>
                   </div>
                 </div>
                 <div className="space-y-2 pt-1">
