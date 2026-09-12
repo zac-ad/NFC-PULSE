@@ -2,31 +2,32 @@ import Link from 'next/link';
 
 export default function CardDisabledPage() {
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center p-4 font-sans">
-      <div className="max-w-sm w-full bg-neutral-950 border border-neutral-800 rounded-3xl p-8 text-center shadow-2xl space-y-5">
-        <div className="w-14 h-14 bg-red-950/60 border border-red-800/80 text-red-400 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold shadow-lg">
-          🚫
+    <main className="min-h-screen bg-[#0a0a0a] text-[#f2f0eb] flex flex-col items-center justify-center p-6 font-sans">
+      <div className="w-full max-w-sm space-y-8 text-center">
+        <div className="w-12 h-12 rounded-full border border-white/10 bg-[#141414] flex items-center justify-center mx-auto">
+          <div className="w-2 h-2 rounded-full bg-white/20" />
         </div>
-        
-        <div className="space-y-2">
-          <h1 className="text-xl font-bold text-white tracking-tight">Card Deactivated</h1>
-          <p className="text-neutral-400 text-xs leading-relaxed">
-            This physical NFC card has been deactivated by fleet administration. Hardware pass access is currently disabled.
+
+        <div className="space-y-3">
+          <h1 className="font-serif text-2xl text-white">This card is inactive.</h1>
+          <p className="text-[14px] text-white/40 leading-relaxed max-w-xs mx-auto">
+            The card you tapped has been deactivated. If this is yours, you can re-enable it from your portal.
           </p>
         </div>
 
-        <div className="pt-2">
+        <div className="flex flex-col items-center gap-3">
           <Link
-            href="/"
-            className="inline-block w-full py-3.5 bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300 rounded-2xl hover:bg-neutral-800 hover:text-white transition-all shadow-sm"
+            href="/portal"
+            className="text-[13px] px-6 py-3 rounded-full bg-white text-black font-medium hover:bg-[#f2f0eb] transition-colors"
           >
-            Return Home
+            Go to portal
+          </Link>
+          <Link href="/" className="text-[12px] text-white/25 hover:text-white/50 transition-colors">
+            Return home
           </Link>
         </div>
 
-        <p className="text-[11px] text-neutral-600 pt-2 font-medium tracking-wide">
-          Powered by <span className="font-bold text-neutral-400">P U L S E</span>
-        </p>
+        <p className="text-[11px] font-mono text-white/15 tracking-widest">PULSE</p>
       </div>
     </main>
   );
