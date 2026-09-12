@@ -419,9 +419,9 @@ function DashboardContent() {
         <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">PULSE Command</h1>
-            <p className="text-xs text-amber-400 font-medium tracking-wide">
+            <p className="text-[11px] font-mono text-white/25 tracking-widest mt-0.5">
               {activeTab === 'PROFESSIONAL'
-                ? 'Professional Unified Live Share Experience'
+                ? 'Your identity dashboard'
                 : 'Personal Unified Live Share Experience'}
             </p>
           </div>

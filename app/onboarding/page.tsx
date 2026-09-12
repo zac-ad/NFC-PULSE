@@ -1,112 +1,83 @@
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function OnboardingIdentityPage() {
+export default function OnboardingPage() {
   const router = useRouter();
-  const [selectedType, setSelectedType] = useState<'PROFESSIONAL' | 'PERSONAL' | null>(null);
+  const [selected, setSelected] = useState<'PROFESSIONAL' | 'PERSONAL' | null>(null);
 
   const handleSelect = (type: 'PROFESSIONAL' | 'PERSONAL') => {
-    setSelectedType(type);
-    setTimeout(() => {
-      router.push(`/signup?preset=${type}`);
-    }, 250);
+    setSelected(type);
+    setTimeout(() => router.push(`/signup?preset=${type}`), 200);
   };
 
   return (
-    <main className="min-h-screen bg-black text-white font-sans selection:bg-neutral-800 flex flex-col justify-between p-6 relative overflow-hidden">
-      
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-neutral-900/40 rounded-full blur-[140px] pointer-events-none -z-10" />
-
-      <header className="w-full max-w-xl mx-auto flex items-center justify-between pt-4">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-white text-black rounded-lg flex items-center justify-center font-bold text-sm">
-            ⚡
-          </div>
-          <span className="text-sm font-bold tracking-widest uppercase">PULSE</span>
+    <main className="min-h-screen bg-[#0a0a0a] text-[#f2f0eb] flex flex-col p-6 font-sans">
+      <header className="max-w-xl mx-auto w-full flex items-center justify-between pt-2 pb-12">
+        <Link href="/" className="flex items-center gap-2 font-serif text-base text-white/50 hover:text-white transition-colors">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M2 12h4l2-6 4 12 3-8 2 2h5" />
+          </svg>
+          PULSE
         </Link>
-        <span className="text-[11px] font-mono font-semibold text-neutral-500 uppercase tracking-wider">
-          Step 1 of 2
-        </span>
+        <span className="text-[11px] font-mono text-white/20 tracking-widest">1 of 2</span>
       </header>
 
-      <div className="w-full max-w-xl mx-auto my-auto py-10 space-y-8">
-        
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white">
-            Choose Your Identity
+      <div className="max-w-xl mx-auto w-full flex-1 flex flex-col justify-center space-y-10">
+        <div className="space-y-3">
+          <h1 className="font-serif text-[clamp(28px,5vw,44px)] leading-tight text-white">
+            Which version of you<br />are you sharing?
           </h1>
-          <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
-            Select how you want to present yourself. You can toggle or add profiles anytime inside your command dashboard.
+          <p className="text-[14px] text-white/35 leading-relaxed max-w-sm">
+            Each card carries one identity. Choose the one this card is for.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             onClick={() => handleSelect('PROFESSIONAL')}
-            className={`p-6 bg-neutral-950 border rounded-3xl text-left transition-all duration-200 relative group flex flex-col justify-between h-64 ${
-              selectedType === 'PROFESSIONAL'
-                ? 'border-white bg-neutral-900 scale-[1.02] shadow-[0_0_30px_rgba(255,255,255,0.15)]'
-                : 'border-neutral-800/80 hover:border-neutral-700 hover:bg-neutral-900/50'
+            className={`p-6 rounded-2xl border text-left transition-all duration-200 ${
+              selected === 'PROFESSIONAL'
+                ? 'bg-white border-white'
+                : 'bg-[#141414] border-white/[0.08] hover:border-white/20'
             }`}
           >
-            <div className="space-y-4">
-              <div className="w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-2xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
-                💼
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-white tracking-tight">Professional</h2>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Engineered for career portfolios, downloadable vCards, and client payment QRs.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between pt-4 border-t border-neutral-900 text-xs font-bold text-neutral-300 group-hover:text-white">
-              <span>Select Work Card</span>
-              <span>➔</span>
-            </div>
+            <p className={`font-serif text-xl mb-2 ${selected === 'PROFESSIONAL' ? 'text-black' : 'text-white'}`}>
+              Professional
+            </p>
+            <p className={`text-[13px] leading-relaxed ${selected === 'PROFESSIONAL' ? 'text-black/50' : 'text-white/35'}`}>
+              Work identity. Corporate vCard, LinkedIn, tap telemetry.
+            </p>
+            <p className={`text-[12px] mt-4 font-medium ${selected === 'PROFESSIONAL' ? 'text-black/60' : 'text-white/25'}`}>
+              Select →
+            </p>
           </button>
 
           <button
             onClick={() => handleSelect('PERSONAL')}
-            className={`p-6 bg-neutral-950 border rounded-3xl text-left transition-all duration-200 relative group flex flex-col justify-between h-64 ${
-              selectedType === 'PERSONAL'
-                ? 'border-white bg-neutral-900 scale-[1.02] shadow-[0_0_30px_rgba(255,255,255,0.15)]'
-                : 'border-neutral-800/80 hover:border-neutral-700 hover:bg-neutral-900/50'
+            className={`p-6 rounded-2xl border text-left transition-all duration-200 ${
+              selected === 'PERSONAL'
+                ? 'bg-[#f2f0eb] border-[#f2f0eb]'
+                : 'bg-[#f2f0eb]/[0.03] border-white/[0.08] hover:border-white/20'
             }`}
           >
-            <div className="space-y-4">
-              <div className="w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-2xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
-                🌴
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-white tracking-tight">Personal</h2>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Built for social handles, Instagram/TikTok deep links, personal GCash, and casual sharing.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-neutral-900 text-xs font-bold text-neutral-300 group-hover:text-white">
-              <span>Select Life Card</span>
-              <span>➔</span>
-            </div>
+            <p className={`font-serif text-xl mb-2 ${selected === 'PERSONAL' ? 'text-black' : 'text-white'}`}>
+              Personal
+            </p>
+            <p className={`text-[13px] leading-relaxed ${selected === 'PERSONAL' ? 'text-black/50' : 'text-white/35'}`}>
+              Personal identity. Socials, messaging, payment handles.
+            </p>
+            <p className={`text-[12px] mt-4 font-medium ${selected === 'PERSONAL' ? 'text-black/60' : 'text-white/25'}`}>
+              Select →
+            </p>
           </button>
-
         </div>
-
       </div>
 
-      <footer className="w-full max-w-xl mx-auto text-center pb-4">
-        <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-widest">
-          PULSE IDENTITY ENGINE
-        </p>
+      <footer className="max-w-xl mx-auto w-full pt-8 pb-2 text-center">
+        <p className="text-[11px] font-mono text-white/15 tracking-widest">PULSE</p>
       </footer>
-
     </main>
   );
 }

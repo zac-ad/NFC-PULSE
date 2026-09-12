@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -8,123 +7,124 @@ import Link from 'next/link';
 function SignUpForm() {
   const searchParams = useSearchParams();
   const preset = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
+  const isPro = preset === 'PROFESSIONAL';
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    document.title = 'PULSE | Create Account';
-  }, []);
+  useEffect(() => { document.title = 'PULSE | Create Account'; }, []);
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
-
-    setLoading(true);
-    setMessage(null);
-
-    const { error } = await supabase.auth.signInWithOtp({
+    setLoading(true); setError('');
+    const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard?preset=${preset}` : undefined,
+        emailRedirectTo: typeof window !== 'undefined'
+          ? `${window.location.origin}/dashboard?preset=${preset}`
+          : undefined,
       },
     });
-
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
-      setMessage({
-        type: 'success',
-        text: `Activation link dispatched to ${email}! Check your inbox to finish setting up your ${preset.toLowerCase()} profile.`,
-      });
-    }
+    if (err) { setError(err.message); } else { setSent(true); }
     setLoading(false);
   };
 
   return (
-    <div className="max-w-md w-full bg-neutral-950 border border-neutral-800/80 rounded-3xl p-8 space-y-6 shadow-2xl backdrop-blur-xl">
-      <div className="text-center space-y-2">
-        <div className="w-10 h-10 bg-neutral-900 border border-neutral-800 text-white rounded-2xl flex items-center justify-center mx-auto font-bold shadow-inner">
-          ⚡
-        </div>
-        <h1 className="text-xl font-bold tracking-tight text-white">Create Your Account</h1>
-        <p className="text-xs text-neutral-400">
-          Setting up your <span className="text-white font-semibold">{preset === 'PROFESSIONAL' ? '💼 Professional' : '🌴 Personal'}</span> identity.
+    <div className={`w-full max-w-sm space-y-8 ${!isPro ? 'text-black' : ''}`}>
+      <div>
+        <Link
+          href="/onboarding"
+          className={`text-[12px] transition-colors ${isPro ? 'text-white/30 hover:text-white/60' : 'text-black/30 hover:text-black/60'}`}
+        >
+          ← Back
+        </Link>
+        <h1 className={`font-serif text-3xl mt-6 ${isPro ? 'text-white' : 'text-black'}`}>
+          {isPro ? 'Professional identity.' : 'Personal identity.'}
+        </h1>
+        <p className={`text-[14px] mt-2 ${isPro ? 'text-white/40' : 'text-black/40'}`}>
+          We&rsquo;ll send an activation link to your email.
         </p>
       </div>
 
-      {message && (
-        <div
-          className={`p-4 rounded-xl border text-xs leading-relaxed ${
-            message.type === 'success'
-              ? 'bg-emerald-950/50 border-emerald-800 text-emerald-300'
-              : 'bg-red-950/50 border-red-800 text-red-300'
-          }`}
-        >
-          {message.text}
+      {sent ? (
+        <div className={`p-5 rounded-2xl border space-y-2 ${
+          isPro ? 'bg-[#141414] border-white/10' : 'bg-white border-black/10'
+        }`}>
+          <p className={`font-serif text-base ${isPro ? 'text-white' : 'text-black'}`}>Link sent.</p>
+          <p className={`text-[13px] leading-relaxed ${isPro ? 'text-white/40' : 'text-black/40'}`}>
+            Check <span className={isPro ? 'text-white/70' : 'text-black/70'}>{email}</span> to activate your profile.
+          </p>
         </div>
-      )}
-
-      <form onSubmit={handleSignUp} className="space-y-4">
-        <div>
-          <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
-            Email Address
-          </label>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@domain.com"
+            onChange={e => setEmail(e.target.value)}
+            placeholder="you@email.com"
             required
-            className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
+            className={`w-full rounded-xl px-4 py-3.5 text-[14px] focus:outline-none ${
+              isPro
+                ? 'bg-[#141414] border border-white/[0.08] text-white placeholder:text-white/20 focus:border-white/20'
+                : 'bg-white border border-black/[0.08] text-black placeholder:text-black/25 focus:border-black/20'
+            }`}
           />
-        </div>
+          {error && <p className="text-[12px] text-red-400">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3.5 rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-40 ${
+              isPro
+                ? 'bg-white text-black hover:bg-[#f2f0eb]'
+                : 'bg-black text-white hover:bg-[#1a1a1a]'
+            }`}
+          >
+            {loading ? 'Sending…' : 'Continue with email'}
+          </button>
+        </form>
+      )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg disabled:opacity-50"
-        >
-          {loading ? 'Creating Account...' : 'Continue with Email ➔'}
-        </button>
-      </form>
-
-      <div className="pt-2 text-center text-xs text-neutral-500">
+      <p className={`text-[12px] text-center ${isPro ? 'text-white/20' : 'text-black/30'}`}>
         Already have an account?{' '}
-        <Link href="/login" className="text-white font-semibold hover:underline">
-          Log In
+        <Link
+          href={isPro ? '/portal/professional/login' : '/portal/personal/login'}
+          className={`border-b pb-px transition-colors ${
+            isPro ? 'text-white/50 border-white/20 hover:text-white' : 'text-black/60 border-black/20 hover:text-black'
+          }`}
+        >
+          Log in.
         </Link>
-      </div>
+      </p>
     </div>
   );
 }
 
 export default function SignUpPage() {
+  const [preset, setPreset] = useState<'PROFESSIONAL' | 'PERSONAL'>('PROFESSIONAL');
+
   return (
-    <main className="min-h-screen bg-black text-white font-sans selection:bg-neutral-800 flex flex-col justify-between p-6 relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-neutral-900/40 rounded-full blur-[140px] pointer-events-none -z-10" />
+    <Suspense fallback={null}>
+      <SignUpPageInner onPreset={setPreset} />
+    </Suspense>
+  );
+}
 
-      <header className="w-full max-w-md mx-auto flex items-center justify-between pt-4">
-        <Link href="/onboarding" className="text-xs text-neutral-400 hover:text-white transition-colors">
-          ← Back to Identity
-        </Link>
-        <span className="text-[11px] font-mono font-semibold text-neutral-500 uppercase tracking-wider">
-          Step 2 of 2
-        </span>
-      </header>
+function SignUpPageInner({ onPreset }: { onPreset: (p: 'PROFESSIONAL' | 'PERSONAL') => void }) {
+  const searchParams = useSearchParams();
+  const preset = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
+  const isPro = preset === 'PROFESSIONAL';
 
-      <div className="my-auto flex justify-center py-6">
-        <Suspense fallback={<div className="text-xs text-neutral-500 font-mono">Loading setup form...</div>}>
-          <SignUpForm />
-        </Suspense>
-      </div>
+  useEffect(() => { onPreset(preset); }, [preset]);
 
-      <footer className="w-full max-w-md mx-auto text-center pb-4">
-        <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-widest">
-          POWERED BY PULSE
-        </p>
-      </footer>
+  return (
+    <main className={`min-h-screen flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 ${
+      isPro ? 'bg-[#0a0a0a]' : 'bg-[#f2f0eb]'
+    }`}>
+      <Suspense fallback={null}>
+        <SignUpForm />
+      </Suspense>
     </main>
   );
 }
