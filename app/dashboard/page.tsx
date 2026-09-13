@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -46,19 +46,39 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls = "w-full bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20";
 
+// ── Helper: get session token for API calls ───────────────────
+async function getToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
+}
+
+async function apiCall(url: string, method: string, body?: object) {
+  const token = await getToken();
+  if (!token) return { error: 'Not authenticated' };
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
 function DashboardContent() {
   const searchParams = useSearchParams();
   const presetParam = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
 
-  const [loading, setLoading]       = useState(true);
-  const [saving, setSaving]         = useState(false);
+  const [loading, setLoading]             = useState(true);
+  const [saving, setSaving]               = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingQr, setUploadingQr]         = useState(false);
 
-  const [userAccount, setUserAccount] = useState<any>(null);
-  const [profiles, setProfiles]       = useState<ProfileData[]>([]);
-  const [activeTab, setActiveTab]     = useState<'PROFESSIONAL' | 'PERSONAL'>(presetParam);
+  const [userAccount, setUserAccount]     = useState<{id: string; email: string} | null>(null);
+  const [profiles, setProfiles]           = useState<ProfileData[]>([]);
+  const [activeTab, setActiveTab]         = useState<'PROFESSIONAL' | 'PERSONAL'>(presetParam);
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [fullName, setFullName]   = useState('');
@@ -84,73 +104,43 @@ function DashboardContent() {
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // ── Auth: listen for session changes (handles magic link redirect) ──────────
+  // ── Load profiles via server API ─────────────────────────────
+  const loadProfiles = useCallback(async () => {
+    const token = await getToken();
+    if (!token) { setLoading(false); return; }
+
+    const res = await fetch('/api/profile', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const json = await res.json();
+
+    if (json.account) setUserAccount(json.account);
+
+    const fetchedProfiles: ProfileData[] = json.profiles || [];
+    setProfiles(fetchedProfiles);
+
+    const target = fetchedProfiles.find(p => p.profile_type === presetParam) || fetchedProfiles[0];
+    if (target) await selectProfileToEdit(target);
+
+    setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetParam]);
+
   useEffect(() => {
     document.title = 'PULSE | Dashboard';
 
-    // Check existing session immediately
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        loadAccountAndProfiles(session.user.email);
-      } else {
-        setLoading(false);
-      }
+      if (session) { loadProfiles(); }
+      else { setLoading(false); }
     });
 
-    // Also listen for auth events (magic link click fires this)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) {
-        loadAccountAndProfiles(session.user.email);
-      }
+      if (session) { loadProfiles(); }
     });
 
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const loadAccountAndProfiles = async (targetEmail: string) => {
-    setLoading(true);
-    setMessage(null);
-    const cleanEmail = targetEmail.trim().toLowerCase();
-
-    const { data: rpcData, error: rpcError } = await supabase.rpc('get_or_create_account', {
-      target_email: cleanEmail,
-    });
-
-    if (rpcError || !rpcData || rpcData.length === 0) {
-      setMessage({ type: 'error', text: `Account error: ${rpcError?.message || 'Unknown error'}` });
-      setLoading(false);
-      return;
-    }
-
-    const account = rpcData[0];
-    setUserAccount(account);
-
-    let { data: fetchedProfiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .or(`account_id.eq.${account.id},email.ilike.${cleanEmail}`);
-
-    if (!fetchedProfiles || fetchedProfiles.length === 0) {
-      const { data: defaultProf } = await supabase
-        .from('profiles')
-        .insert({
-          account_id: account.id,
-          email: cleanEmail,
-          full_name: cleanEmail.split('@')[0],
-          slug: `${cleanEmail.split('@')[0]}-${Date.now().toString().slice(-4)}`,
-          profile_type: presetParam,
-        })
-        .select()
-        .single();
-      fetchedProfiles = defaultProf ? [defaultProf] : [];
-    }
-
-    setProfiles(fetchedProfiles || []);
-    const targetProf = fetchedProfiles?.find(p => p.profile_type === presetParam) || fetchedProfiles?.[0];
-    if (targetProf) await selectProfileToEdit(targetProf);
-    setLoading(false);
-  };
 
   const selectProfileToEdit = async (prof: ProfileData) => {
     setCurrentProfileId(prof.id);
@@ -166,7 +156,7 @@ function DashboardContent() {
     setBannerUrl(prof.banner_url || '');
     setIsActive(prof.is_active ?? true);
 
-    // Load links — using sort_order to match the actual schema
+    // Links — direct read, public data, RLS allows it
     const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
@@ -174,64 +164,48 @@ function DashboardContent() {
       .order('position', { ascending: true });
     setItems(profileItems || []);
 
-    // Load card
+    // Card
     const { data: cardData } = await supabase
       .from('hardware_cards')
       .select('card_code, tap_count')
       .eq('profile_id', prof.id)
       .maybeSingle();
     setAssignedCardCode(cardData?.card_code || null);
+    setTapCount(cardData?.tap_count || 0);
 
-    // Load taps — from card_taps table, not the denormalized count
-    const { data: tapsData, count } = await supabase
+    // Recent taps
+    const { data: tapsData } = await supabase
       .from('card_taps')
-      .select('*', { count: 'exact' })
+      .select('id, created_at, city, country')
       .eq('profile_id', prof.id)
-      .order('created_at', { ascending: false });
-    setTapCount(count || 0);
-    setRecentTaps(tapsData?.slice(0, 5) || []);
+      .order('created_at', { ascending: false })
+      .limit(5);
+    setRecentTaps(tapsData || []);
   };
 
   const handleTabSwitch = async (type: 'PROFESSIONAL' | 'PERSONAL') => {
     setActiveTab(type);
     const existing = profiles.find(p => p.profile_type === type);
-    if (existing) {
-      await selectProfileToEdit(existing);
-    } else if (userAccount) {
-      setLoading(true);
-      const base = userAccount.email.split('@')[0];
-      const { data: newProf, error } = await supabase
-        .from('profiles')
-        .insert({
-          account_id: userAccount.id,
-          email: userAccount.email,
-          full_name: fullName || base,
-          slug: `${base}-${type.toLowerCase()}-${Date.now().toString().slice(-4)}`,
-          profile_type: type,
-        })
-        .select()
-        .single();
-      if (!error && newProf) {
-        setProfiles(prev => [...prev, newProf]);
-        await selectProfileToEdit(newProf);
-        setMessage({ type: 'success', text: `Created new ${type} profile.` });
-      }
-      setLoading(false);
-    }
+    if (existing) { await selectProfileToEdit(existing); }
   };
 
+  // ── Private/Public toggle — via server API ───────────────────
   const handleToggleActive = async () => {
     if (!currentProfileId) return;
     const next = !isActive;
-    setIsActive(next);
-    const { error } = await supabase
-      .from('profiles').update({ is_active: next }).eq('id', currentProfileId);
-    if (error) {
-      setIsActive(!next);
-      setMessage({ type: 'error', text: 'Failed to update status.' });
+    setIsActive(next); // optimistic
+    const result = await apiCall('/api/profile', 'PATCH', {
+      profileId: currentProfileId,
+      is_active: next,
+    });
+    if (result.error) {
+      setIsActive(!next); // revert
+      setMessage({ type: 'error', text: `Failed: ${result.error}` });
     } else {
       setMessage({ type: 'success', text: `Profile is now ${next ? 'public' : 'private'}.` });
-      setProfiles(prev => prev.map(p => p.id === currentProfileId ? { ...p, is_active: next } : p));
+      setProfiles(prev => prev.map(p =>
+        p.id === currentProfileId ? { ...p, is_active: next } : p
+      ));
     }
   };
 
@@ -242,6 +216,7 @@ function DashboardContent() {
     setProfiles([]);
   };
 
+  // ── File upload ───────────────────────────────────────────────
   const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
     if (type === 'avatar') setUploadingAvatar(true);
     if (type === 'banner') setUploadingBanner(true);
@@ -257,8 +232,9 @@ function DashboardContent() {
       if (type === 'banner') setBannerUrl(data.publicUrl);
       if (type === 'qr') setQrImageUrl(data.publicUrl);
       setMessage({ type: 'success', text: 'File uploaded.' });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Upload failed.' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed.';
+      setMessage({ type: 'error', text: msg });
     } finally {
       setUploadingAvatar(false);
       setUploadingBanner(false);
@@ -266,19 +242,29 @@ function DashboardContent() {
     }
   };
 
+  // ── Save identity — via server API ────────────────────────────
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProfileId) return;
     setSaving(true);
     setMessage(null);
-    const { error } = await supabase.from('profiles').update({
-      full_name: fullName, title, company, bio, phone, email,
-      slug, avatar_url: avatarUrl, banner_url: bannerUrl, is_active: isActive,
-    }).eq('id', currentProfileId);
-    if (error) {
-      setMessage({ type: 'error', text: `Save failed: ${error.message}` });
+    const result = await apiCall('/api/profile', 'PATCH', {
+      profileId: currentProfileId,
+      full_name: fullName,
+      title,
+      company,
+      bio,
+      phone,
+      email,
+      slug,
+      avatar_url: avatarUrl,
+      banner_url: bannerUrl,
+      is_active: isActive,
+    });
+    if (result.error) {
+      setMessage({ type: 'error', text: `Save failed: ${result.error}` });
     } else {
-      setMessage({ type: 'success', text: 'Profile saved.' });
+      setMessage({ type: 'success', text: 'Profile saved. Live card updated.' });
       setProfiles(prev => prev.map(p =>
         p.id === currentProfileId
           ? { ...p, full_name: fullName, slug, title, company, bio, phone, email, avatar_url: avatarUrl, banner_url: bannerUrl, is_active: isActive }
@@ -288,46 +274,54 @@ function DashboardContent() {
     setSaving(false);
   };
 
+  // ── Add social link — via server API ─────────────────────────
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProfileId || !linkTitle || !linkUrl) return;
-    const { data, error } = await supabase.from('profile_links').insert({
+    const result = await apiCall('/api/links', 'POST', {
       profile_id: currentProfileId,
       title: linkTitle,
       url: linkUrl,
       type: 'link',
       position: items.length + 1,
-    }).select().single();
-    if (error) {
-      setMessage({ type: 'error', text: `Failed to add link: ${error.message}` });
-    } else if (data) {
-      setItems(prev => [...prev, data]);
+    });
+    if (result.error) {
+      setMessage({ type: 'error', text: `Failed to add link: ${result.error}` });
+    } else if (result.link) {
+      setItems(prev => [...prev, result.link]);
       setLinkTitle(''); setLinkUrl('');
+      setMessage({ type: 'success', text: 'Link added.' });
     }
   };
 
+  // ── Add QR — via server API ───────────────────────────────────
   const handleAddQr = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProfileId || !qrTitle || !qrImageUrl) return;
-    const { data, error } = await supabase.from('profile_links').insert({
+    const result = await apiCall('/api/links', 'POST', {
       profile_id: currentProfileId,
       title: qrTitle,
       url: qrImageUrl,
       type: 'qr',
       position: items.length + 1,
-    }).select().single();
-    if (error) {
-      setMessage({ type: 'error', text: `Failed to add QR: ${error.message}` });
-    } else if (data) {
-      setItems(prev => [...prev, data]);
+    });
+    if (result.error) {
+      setMessage({ type: 'error', text: `Failed to add QR: ${result.error}` });
+    } else if (result.link) {
+      setItems(prev => [...prev, result.link]);
       setQrTitle(''); setQrImageUrl('');
+      setMessage({ type: 'success', text: 'QR code added.' });
     }
   };
 
+  // ── Delete link — via server API ──────────────────────────────
   const handleDeleteItem = async (id?: string) => {
-    if (!id) return;
-    const { error } = await supabase.from('profile_links').delete().eq('id', id);
-    if (!error) setItems(prev => prev.filter(l => l.id !== id));
+    if (!id || !currentProfileId) return;
+    const result = await apiCall('/api/links', 'DELETE', {
+      linkId: id,
+      profileId: currentProfileId,
+    });
+    if (!result.error) setItems(prev => prev.filter(l => l.id !== id));
   };
 
   const socialLinks = items.filter(i => i.type !== 'qr');
@@ -358,10 +352,7 @@ function DashboardContent() {
             )}
           </div>
           {userAccount && (
-            <button
-              onClick={handleSignOut}
-              className="text-[12px] text-white/25 hover:text-white/50 transition-colors mt-1"
-            >
+            <button onClick={handleSignOut} className="text-[12px] text-white/25 hover:text-white/50 transition-colors mt-1">
               Sign out
             </button>
           )}
@@ -379,7 +370,6 @@ function DashboardContent() {
         )}
 
         {!userAccount ? (
-          /* Not signed in — show sign-in prompt */
           <div className="py-16 text-center space-y-4">
             <p className="font-serif text-xl text-white">You&rsquo;re not signed in.</p>
             <p className="text-[14px] text-white/40">Use your magic link or sign in through your portal.</p>
@@ -404,9 +394,7 @@ function DashboardContent() {
                   key={type}
                   onClick={() => handleTabSwitch(type)}
                   className={`py-3 rounded-xl text-[13px] font-medium transition-all ${
-                    activeTab === type
-                      ? 'bg-white text-black'
-                      : 'text-white/35 hover:text-white'
+                    activeTab === type ? 'bg-white text-black' : 'text-white/35 hover:text-white'
                   }`}
                 >
                   {type === 'PROFESSIONAL' ? 'Professional' : 'Personal'}
@@ -422,9 +410,7 @@ function DashboardContent() {
                   <p className="text-[14px] text-white font-medium">{isActive ? 'Public' : 'Private'}</p>
                 </div>
                 <p className="text-[12px] text-white/30">
-                  {isActive
-                    ? `Tapping opens /p/${slug}`
-                    : 'Card shows a locked screen when tapped'}
+                  {isActive ? `Live at /p/${slug}` : 'Card shows a locked screen when tapped'}
                 </p>
               </div>
               <button
@@ -446,10 +432,8 @@ function DashboardContent() {
                   <p className="text-[10px] font-mono text-white/25 tracking-widest mb-1">HARDWARE CARD</p>
                   <p className="font-mono text-sm text-white">{assignedCardCode || 'No card paired'}</p>
                 </div>
-                <Link
-                  href="/activate"
-                  className="text-[12px] text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px"
-                >
+                <Link href="/activate"
+                  className="text-[12px] text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px">
                   {assignedCardCode ? 'Pair another' : 'Pair card'}
                 </Link>
               </div>
@@ -485,7 +469,6 @@ function DashboardContent() {
             <form onSubmit={handleSaveProfile} className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-5">
               <h2 className="font-serif text-lg text-white">Identity details</h2>
 
-              {/* Avatar + Banner */}
               <div className="grid grid-cols-2 gap-4 pb-4 border-b border-white/[0.06]">
                 <Field label="Avatar">
                   <input type="file" accept="image/*"
@@ -531,8 +514,7 @@ function DashboardContent() {
               </Field>
 
               <button type="submit" disabled={saving}
-                className="w-full py-3.5 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors disabled:opacity-40"
-              >
+                className="w-full py-3.5 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors disabled:opacity-40">
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
             </form>
@@ -540,7 +522,6 @@ function DashboardContent() {
             {/* Social links */}
             <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-4">
               <h2 className="font-serif text-lg text-white">Social links</h2>
-
               <form onSubmit={handleAddLink} className="flex flex-col sm:flex-row gap-3">
                 <input
                   placeholder="Title (e.g. LinkedIn)"
@@ -553,8 +534,7 @@ function DashboardContent() {
                   className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                 />
                 <button type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors whitespace-nowrap"
-                >
+                  className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors whitespace-nowrap">
                   Add
                 </button>
               </form>
@@ -580,7 +560,6 @@ function DashboardContent() {
             {/* Payment QRs */}
             <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-4">
               <h2 className="font-serif text-lg text-white">Payment QR codes</h2>
-
               <form onSubmit={handleAddQr} className="space-y-3">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
@@ -601,8 +580,7 @@ function DashboardContent() {
                     className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                   />
                   <button type="submit" disabled={!qrTitle || !qrImageUrl}
-                    className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors disabled:opacity-40 whitespace-nowrap"
-                  >
+                    className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors disabled:opacity-40 whitespace-nowrap">
                     Add QR
                   </button>
                 </div>
@@ -626,12 +604,10 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* View live card */}
             {slug && (
               <div className="text-center pt-2 pb-4">
                 <a href={`/p/${slug}`} target="_blank" rel="noreferrer"
-                  className="text-[13px] text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px"
-                >
+                  className="text-[13px] text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px">
                   View your live card →
                 </a>
               </div>
