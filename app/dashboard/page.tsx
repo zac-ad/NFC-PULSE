@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
 interface LinkItem {
   id?: string;
@@ -14,6 +15,8 @@ interface LinkItem {
 interface TapEvent {
   id: string;
   created_at: string;
+  city?: string;
+  country?: string;
 }
 
 interface ProfileData {
@@ -32,74 +35,90 @@ interface ProfileData {
   profile_type: 'PROFESSIONAL' | 'PERSONAL';
 }
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-[10px] font-mono text-white/25 tracking-widest uppercase">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inputCls = "w-full bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20";
+
 function DashboardContent() {
   const searchParams = useSearchParams();
   const presetParam = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
 
-  const [loading, setLoading] = useState(false);
-  const [sendingMagicLink, setSendingMagicLink] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [uploadingQr, setUploadingQr] = useState(false);
+  const [uploadingQr, setUploadingQr]         = useState(false);
 
-  const [searchEmail, setSearchEmail] = useState('');
   const [userAccount, setUserAccount] = useState<any>(null);
-  const [profiles, setProfiles] = useState<ProfileData[]>([]);
-  const [activeTab, setActiveTab] = useState<'PROFESSIONAL' | 'PERSONAL'>(presetParam);
+  const [profiles, setProfiles]       = useState<ProfileData[]>([]);
+  const [activeTab, setActiveTab]     = useState<'PROFESSIONAL' | 'PERSONAL'>(presetParam);
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
-  const [fullName, setFullName] = useState('');
-  const [title, setTitle] = useState('');
-  const [company, setCompany] = useState('');
-  const [bio, setBio] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [slug, setSlug] = useState('');
+  const [fullName, setFullName]   = useState('');
+  const [title, setTitle]         = useState('');
+  const [company, setCompany]     = useState('');
+  const [bio, setBio]             = useState('');
+  const [phone, setPhone]         = useState('');
+  const [email, setEmail]         = useState('');
+  const [slug, setSlug]           = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
-  const [isActive, setIsActive] = useState<boolean>(true);
+  const [isActive, setIsActive]   = useState(true);
 
   const [assignedCardCode, setAssignedCardCode] = useState<string | null>(null);
-  const [tapCount, setTapCount] = useState<number>(0);
+  const [tapCount, setTapCount]   = useState(0);
   const [recentTaps, setRecentTaps] = useState<TapEvent[]>([]);
 
-  const [items, setItems] = useState<LinkItem[]>([]);
+  const [items, setItems]         = useState<LinkItem[]>([]);
   const [linkTitle, setLinkTitle] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [qrTitle, setQrTitle] = useState('');
+  const [linkUrl, setLinkUrl]     = useState('');
+  const [qrTitle, setQrTitle]     = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // ── Auth: listen for session changes (handles magic link redirect) ──────────
   useEffect(() => {
     document.title = 'PULSE | Dashboard';
-    checkSessionAndLoad();
-  }, []);
 
-  const checkSessionAndLoad = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.email) {
-      loadAccountAndProfiles(session.user.email);
-    }
-  };
+    // Check existing session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        loadAccountAndProfiles(session.user.email);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Also listen for auth events (magic link click fires this)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        loadAccountAndProfiles(session.user.email);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadAccountAndProfiles = async (targetEmail: string) => {
     setLoading(true);
     setMessage(null);
-
     const cleanEmail = targetEmail.trim().toLowerCase();
 
-    // Safely resolve or create account row using the SECURITY DEFINER RPC function
     const { data: rpcData, error: rpcError } = await supabase.rpc('get_or_create_account', {
       target_email: cleanEmail,
     });
 
     if (rpcError || !rpcData || rpcData.length === 0) {
-      setMessage({
-        type: 'error',
-        text: `Unable to resolve account: ${rpcError?.message || 'Database error'}`,
-      });
+      setMessage({ type: 'error', text: `Account error: ${rpcError?.message || 'Unknown error'}` });
       setLoading(false);
       return;
     }
@@ -112,37 +131,24 @@ function DashboardContent() {
       .select('*')
       .or(`account_id.eq.${account.id},email.ilike.${cleanEmail}`);
 
-    if (fetchedProfiles && fetchedProfiles.length > 0) {
-      const unlinkedProfiles = fetchedProfiles.filter((p) => !p.account_id);
-      if (unlinkedProfiles.length > 0) {
-        await supabase
-          .from('profiles')
-          .update({ account_id: account.id })
-          .eq('email', cleanEmail);
-      }
-    } else {
+    if (!fetchedProfiles || fetchedProfiles.length === 0) {
       const { data: defaultProf } = await supabase
         .from('profiles')
         .insert({
           account_id: account.id,
           email: cleanEmail,
-          full_name: 'Isaac Salasiban',
-          slug: `isaac-${Date.now().toString().slice(-4)}`,
+          full_name: cleanEmail.split('@')[0],
+          slug: `${cleanEmail.split('@')[0]}-${Date.now().toString().slice(-4)}`,
           profile_type: presetParam,
         })
         .select()
         .single();
-
       fetchedProfiles = defaultProf ? [defaultProf] : [];
     }
 
-    setProfiles(fetchedProfiles);
-
-    const targetProf = fetchedProfiles.find((p) => p.profile_type === presetParam) || fetchedProfiles[0];
-    if (targetProf) {
-      selectProfileToEdit(targetProf);
-    }
-
+    setProfiles(fetchedProfiles || []);
+    const targetProf = fetchedProfiles?.find(p => p.profile_type === presetParam) || fetchedProfiles?.[0];
+    if (targetProf) await selectProfileToEdit(targetProf);
     setLoading(false);
   };
 
@@ -154,158 +160,105 @@ function DashboardContent() {
     setCompany(prof.company || '');
     setBio(prof.bio || '');
     setPhone(prof.phone || '');
-    setEmail(prof.email || prof.email);
+    setEmail(prof.email || '');
     setSlug(prof.slug || '');
     setAvatarUrl(prof.avatar_url || '');
     setBannerUrl(prof.banner_url || '');
     setIsActive(prof.is_active ?? true);
 
-    document.title = `PULSE | Dashboard - ${prof.full_name || prof.profile_type}`;
-
+    // Load links — using sort_order to match the actual schema
     const { data: profileItems } = await supabase
       .from('profile_links')
       .select('*')
       .eq('profile_id', prof.id)
       .order('position', { ascending: true });
-
     setItems(profileItems || []);
 
+    // Load card
     const { data: cardData } = await supabase
       .from('hardware_cards')
-      .select('card_code')
+      .select('card_code, tap_count')
       .eq('profile_id', prof.id)
-      .single();
-
+      .maybeSingle();
     setAssignedCardCode(cardData?.card_code || null);
 
+    // Load taps — from card_taps table, not the denormalized count
     const { data: tapsData, count } = await supabase
       .from('card_taps')
       .select('*', { count: 'exact' })
       .eq('profile_id', prof.id)
       .order('created_at', { ascending: false });
-
     setTapCount(count || 0);
     setRecentTaps(tapsData?.slice(0, 5) || []);
   };
 
-  const handleTabSwitch = (type: 'PROFESSIONAL' | 'PERSONAL') => {
+  const handleTabSwitch = async (type: 'PROFESSIONAL' | 'PERSONAL') => {
     setActiveTab(type);
-    const existingProf = profiles.find((p) => p.profile_type === type);
-
-    if (existingProf) {
-      selectProfileToEdit(existingProf);
+    const existing = profiles.find(p => p.profile_type === type);
+    if (existing) {
+      await selectProfileToEdit(existing);
     } else if (userAccount) {
-      createMissingProfile(type);
+      setLoading(true);
+      const base = userAccount.email.split('@')[0];
+      const { data: newProf, error } = await supabase
+        .from('profiles')
+        .insert({
+          account_id: userAccount.id,
+          email: userAccount.email,
+          full_name: fullName || base,
+          slug: `${base}-${type.toLowerCase()}-${Date.now().toString().slice(-4)}`,
+          profile_type: type,
+        })
+        .select()
+        .single();
+      if (!error && newProf) {
+        setProfiles(prev => [...prev, newProf]);
+        await selectProfileToEdit(newProf);
+        setMessage({ type: 'success', text: `Created new ${type} profile.` });
+      }
+      setLoading(false);
     }
   };
 
-  const createMissingProfile = async (type: 'PROFESSIONAL' | 'PERSONAL') => {
-    setLoading(true);
-    const defaultSlug = `${userAccount.email.split('@')[0]}-${type.toLowerCase()}`;
-
-    const { data: newProf, error } = await supabase
-      .from('profiles')
-      .insert({
-        account_id: userAccount.id,
-        email: userAccount.email,
-        full_name: fullName || 'Isaac Salasiban',
-        slug: defaultSlug,
-        profile_type: type,
-      })
-      .select()
-      .single();
-
-    if (!error && newProf) {
-      const updatedList = [...profiles, newProf];
-      setProfiles(updatedList);
-      selectProfileToEdit(newProf);
-      setMessage({ type: 'success', text: `Created new ${type} profile!` });
-    }
-    setLoading(false);
-  };
-
-  const handleToggleActiveStatus = async () => {
+  const handleToggleActive = async () => {
     if (!currentProfileId) return;
-    const newStatus = !isActive;
-    setIsActive(newStatus);
-
+    const next = !isActive;
+    setIsActive(next);
     const { error } = await supabase
-      .from('profiles')
-      .update({ is_active: newStatus })
-      .eq('id', currentProfileId);
-
+      .from('profiles').update({ is_active: next }).eq('id', currentProfileId);
     if (error) {
-      setIsActive(!newStatus);
-      setMessage({ type: 'error', text: 'Failed to update privacy status.' });
+      setIsActive(!next);
+      setMessage({ type: 'error', text: 'Failed to update status.' });
     } else {
-      setMessage({
-        type: 'success',
-        text: `${activeTab} profile is now ${newStatus ? 'PUBLIC & LIVE' : 'PRIVATE & LOCKED'}.`,
-      });
-      setProfiles((prev) =>
-        prev.map((p) => (p.id === currentProfileId ? { ...p, is_active: newStatus } : p))
-      );
+      setMessage({ type: 'success', text: `Profile is now ${next ? 'public' : 'private'}.` });
+      setProfiles(prev => prev.map(p => p.id === currentProfileId ? { ...p, is_active: next } : p));
     }
-  };
-
-  const handleSendMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchEmail) return;
-
-    setSendingMagicLink(true);
-    setMessage(null);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email: searchEmail,
-      options: {
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard?preset=${activeTab}` : undefined,
-      },
-    });
-
-    if (error) {
-      await loadAccountAndProfiles(searchEmail);
-    } else {
-      setMessage({
-        type: 'success',
-        text: `Magic Login Link sent to ${searchEmail}! Check your inbox.`,
-      });
-    }
-    setSendingMagicLink(false);
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUserAccount(null);
     setCurrentProfileId(null);
-    setMessage({ type: 'success', text: 'Signed out successfully.' });
+    setProfiles([]);
   };
 
   const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
+    if (type === 'avatar') setUploadingAvatar(true);
+    if (type === 'banner') setUploadingBanner(true);
+    if (type === 'qr') setUploadingQr(true);
     try {
-      if (type === 'avatar') setUploadingAvatar(true);
-      if (type === 'banner') setUploadingBanner(true);
-      if (type === 'qr') setUploadingQr(true);
-
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${currentProfileId || 'user'}-${type}-${Date.now()}.${fileExt}`;
-
+      const ext = file.name.split('.').pop();
+      const fileName = `${currentProfileId || 'user'}-${type}-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
-        .from('profile-media')
-        .upload(fileName, file, { upsert: true });
-
+        .from('profile-media').upload(fileName, file, { upsert: true });
       if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from('profile-media')
-        .getPublicUrl(fileName);
-
+      const { data } = supabase.storage.from('profile-media').getPublicUrl(fileName);
       if (type === 'avatar') setAvatarUrl(data.publicUrl);
       if (type === 'banner') setBannerUrl(data.publicUrl);
       if (type === 'qr') setQrImageUrl(data.publicUrl);
-
-      setMessage({ type: 'success', text: 'File uploaded successfully!' });
+      setMessage({ type: 'success', text: 'File uploaded.' });
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Image upload failed.' });
+      setMessage({ type: 'error', text: err.message || 'Upload failed.' });
     } finally {
       setUploadingAvatar(false);
       setUploadingBanner(false);
@@ -316,37 +269,21 @@ function DashboardContent() {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProfileId) return;
-
     setSaving(true);
     setMessage(null);
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: fullName,
-        title,
-        company,
-        bio,
-        phone,
-        email,
-        slug,
-        avatar_url: avatarUrl,
-        banner_url: bannerUrl,
-        is_active: isActive,
-      })
-      .eq('id', currentProfileId);
-
+    const { error } = await supabase.from('profiles').update({
+      full_name: fullName, title, company, bio, phone, email,
+      slug, avatar_url: avatarUrl, banner_url: bannerUrl, is_active: isActive,
+    }).eq('id', currentProfileId);
     if (error) {
-      setMessage({ type: 'error', text: 'Failed to update profile details.' });
+      setMessage({ type: 'error', text: `Save failed: ${error.message}` });
     } else {
-      setMessage({ type: 'success', text: `${activeTab} profile updated successfully!` });
-      setProfiles((prev) =>
-        prev.map((p) =>
-          p.id === currentProfileId
-            ? { ...p, full_name: fullName, slug, title, company, bio, phone, email, avatar_url: avatarUrl, banner_url: bannerUrl, is_active: isActive }
-            : p
-        )
-      );
+      setMessage({ type: 'success', text: 'Profile saved.' });
+      setProfiles(prev => prev.map(p =>
+        p.id === currentProfileId
+          ? { ...p, full_name: fullName, slug, title, company, bio, phone, email, avatar_url: avatarUrl, banner_url: bannerUrl, is_active: isActive }
+          : p
+      ));
     }
     setSaving(false);
   };
@@ -354,442 +291,317 @@ function DashboardContent() {
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProfileId || !linkTitle || !linkUrl) return;
-
-    const newLinkItem = {
+    const { data, error } = await supabase.from('profile_links').insert({
       profile_id: currentProfileId,
       title: linkTitle,
       url: linkUrl,
       type: 'link',
       position: items.length + 1,
-    };
-
-    const { data, error } = await supabase
-      .from('profile_links')
-      .insert(newLinkItem)
-      .select()
-      .single();
-
-    if (!error && data) {
-      setItems([...items, data]);
-      setLinkTitle('');
-      setLinkUrl('');
+    }).select().single();
+    if (error) {
+      setMessage({ type: 'error', text: `Failed to add link: ${error.message}` });
+    } else if (data) {
+      setItems(prev => [...prev, data]);
+      setLinkTitle(''); setLinkUrl('');
     }
   };
 
   const handleAddQr = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProfileId || !qrTitle || !qrImageUrl) return;
-
-    const newQrItem = {
+    const { data, error } = await supabase.from('profile_links').insert({
       profile_id: currentProfileId,
       title: qrTitle,
       url: qrImageUrl,
       type: 'qr',
       position: items.length + 1,
-    };
-
-    const { data, error } = await supabase
-      .from('profile_links')
-      .insert(newQrItem)
-      .select()
-      .single();
-
-    if (!error && data) {
-      setItems([...items, data]);
-      setQrTitle('');
-      setQrImageUrl('');
+    }).select().single();
+    if (error) {
+      setMessage({ type: 'error', text: `Failed to add QR: ${error.message}` });
+    } else if (data) {
+      setItems(prev => [...prev, data]);
+      setQrTitle(''); setQrImageUrl('');
     }
   };
 
   const handleDeleteItem = async (id?: string) => {
     if (!id) return;
     const { error } = await supabase.from('profile_links').delete().eq('id', id);
-    if (!error) {
-      setItems(items.filter((l) => l.id !== id));
-    }
+    if (!error) setItems(prev => prev.filter(l => l.id !== id));
   };
 
-  const socialLinks = items.filter((i) => i.type !== 'qr');
-  const qrCodes = items.filter((i) => i.type === 'qr');
+  const socialLinks = items.filter(i => i.type !== 'qr');
+  const qrCodes     = items.filter(i => i.type === 'qr');
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <p className="text-[12px] font-mono text-white/25 tracking-widest">Loading your identity...</p>
+    </div>
+  );
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 md:p-8 flex justify-center font-sans">
-      <div className="max-w-2xl w-full space-y-6">
-        
-        <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
+    <main className="min-h-screen bg-[#0a0a0a] text-[#f2f0eb] font-sans pb-20">
+      <div className="max-w-2xl mx-auto px-5 pt-10 space-y-6">
+
+        {/* Header */}
+        <div className="flex items-start justify-between pb-6 border-b border-white/[0.06]">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">PULSE Command</h1>
-            <p className="text-[11px] font-mono text-white/25 tracking-widest mt-0.5">
-              {activeTab === 'PROFESSIONAL'
-                ? 'Your identity dashboard'
-                : 'Personal Unified Live Share Experience'}
-            </p>
+            <Link href="/" className="flex items-center gap-2 font-serif text-sm text-white/35 hover:text-white transition-colors mb-3">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M2 12h4l2-6 4 12 3-8 2 2h5" />
+              </svg>
+              PULSE
+            </Link>
+            <h1 className="font-serif text-2xl text-white">Your identity.</h1>
+            {userAccount && (
+              <p className="text-[12px] text-white/25 mt-1 font-mono">{userAccount.email}</p>
+            )}
           </div>
           {userAccount && (
             <button
               onClick={handleSignOut}
-              className="px-3.5 py-1.5 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-xs font-semibold rounded-lg transition-colors text-neutral-300"
+              className="text-[12px] text-white/25 hover:text-white/50 transition-colors mt-1"
             >
-              Sign Out
+              Sign out
             </button>
           )}
         </div>
 
+        {/* Message */}
         {message && (
-          <div
-            className={`p-4 rounded-xl border text-xs leading-relaxed ${
-              message.type === 'success'
-                ? 'bg-emerald-950/50 border-emerald-800 text-emerald-300'
-                : 'bg-red-950/50 border-red-800 text-red-300'
-            }`}
-          >
+          <div className={`px-4 py-3 rounded-xl text-[13px] border ${
+            message.type === 'success'
+              ? 'bg-white/[0.04] border-white/10 text-white/70'
+              : 'bg-red-950/30 border-red-900/50 text-red-400'
+          }`}>
             {message.text}
           </div>
         )}
 
         {!userAccount ? (
-          <form onSubmit={handleSendMagicLink} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-            <h2 className="text-lg font-semibold">Access Account Dashboard</h2>
-            <p className="text-xs text-neutral-400">Enter your registered email address to access your Work & Personal profiles.</p>
-            <div>
-              <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                Account Email
-              </label>
-              <input
-                type="email"
-                value={searchEmail}
-                onChange={(e) => setSearchEmail(e.target.value)}
-                placeholder="you@domain.com"
-                required
-                autoComplete="off"
-                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neutral-600"
-              />
+          /* Not signed in — show sign-in prompt */
+          <div className="py-16 text-center space-y-4">
+            <p className="font-serif text-xl text-white">You&rsquo;re not signed in.</p>
+            <p className="text-[14px] text-white/40">Use your magic link or sign in through your portal.</p>
+            <div className="flex items-center justify-center gap-4 pt-4">
+              <Link href="/portal/professional/login"
+                className="text-[13px] px-5 py-2.5 rounded-full bg-white text-black font-medium hover:bg-[#f2f0eb] transition-colors">
+                Professional portal
+              </Link>
+              <Link href="/portal/personal/login"
+                className="text-[13px] px-5 py-2.5 rounded-full bg-[#f2f0eb] text-black font-medium hover:bg-white transition-colors">
+                Personal portal
+              </Link>
             </div>
-            <button
-              type="submit"
-              disabled={sendingMagicLink || loading}
-              className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50"
-            >
-              {sendingMagicLink ? 'Sending Link...' : 'Open Multi-Identity Dashboard'}
-            </button>
-          </form>
+          </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5">
 
-            <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-1.5 border border-neutral-800 rounded-2xl shadow-lg">
-              <button
-                onClick={() => handleTabSwitch('PROFESSIONAL')}
-                className={`py-3 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
-                  activeTab === 'PROFESSIONAL'
-                    ? 'bg-white text-black shadow-lg'
-                    : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
-                }`}
-              >
-                💼 Professional Card
-              </button>
-              <button
-                onClick={() => handleTabSwitch('PERSONAL')}
-                className={`py-3 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
-                  activeTab === 'PERSONAL'
-                    ? 'bg-white text-black shadow-lg'
-                    : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
-                }`}
-              >
-                🌴 Personal Card
-              </button>
+            {/* Tab switcher */}
+            <div className="grid grid-cols-2 gap-2 bg-[#141414] p-1.5 border border-white/[0.06] rounded-2xl">
+              {(['PROFESSIONAL', 'PERSONAL'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => handleTabSwitch(type)}
+                  className={`py-3 rounded-xl text-[13px] font-medium transition-all ${
+                    activeTab === type
+                      ? 'bg-white text-black'
+                      : 'text-white/35 hover:text-white'
+                  }`}
+                >
+                  {type === 'PROFESSIONAL' ? 'Professional' : 'Personal'}
+                </button>
+              ))}
             </div>
 
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 flex items-center justify-between shadow-xl">
+            {/* Privacy toggle */}
+            <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
-                  <p className="text-sm font-bold text-white">
-                    {isActive ? 'Public & Active' : 'Private & Locked'}
-                  </p>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white/60 animate-pulse' : 'bg-red-500/60'}`} />
+                  <p className="text-[14px] text-white font-medium">{isActive ? 'Public' : 'Private'}</p>
                 </div>
-                <p className="text-xs text-neutral-400">
+                <p className="text-[12px] text-white/30">
                   {isActive
-                    ? `Tapping this ${activeTab.toLowerCase()} card opens /p/${slug}`
-                    : `Tapping this card displays a "Profile Private" locked screen.`}
+                    ? `Tapping opens /p/${slug}`
+                    : 'Card shows a locked screen when tapped'}
                 </p>
               </div>
               <button
-                type="button"
-                onClick={handleToggleActiveStatus}
-                className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                onClick={handleToggleActive}
+                className={`px-4 py-2 rounded-xl text-[12px] font-medium border transition-colors ${
                   isActive
-                    ? 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800'
-                    : 'bg-red-950 border-red-800 text-red-400 hover:bg-red-900'
+                    ? 'bg-white/[0.04] border-white/10 text-white/50 hover:text-white'
+                    : 'bg-white text-black border-transparent'
                 }`}
               >
-                {isActive ? 'Set Private' : 'Make Public'}
+                {isActive ? 'Set private' : 'Make public'}
               </button>
             </div>
 
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4 flex items-center justify-between text-xs shadow-md">
-              <div className="space-y-0.5">
-                <p className="text-neutral-400 font-medium">Assigned Hardware Pass</p>
-                <p className="font-mono font-bold text-white text-sm">
-                  {assignedCardCode || 'No card paired yet'}
-                </p>
+            {/* Card + telemetry */}
+            <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-mono text-white/25 tracking-widest mb-1">HARDWARE CARD</p>
+                  <p className="font-mono text-sm text-white">{assignedCardCode || 'No card paired'}</p>
+                </div>
+                <Link
+                  href="/activate"
+                  className="text-[12px] text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px"
+                >
+                  {assignedCardCode ? 'Pair another' : 'Pair card'}
+                </Link>
               </div>
-              <a
-                href={`/activate?code=`}
-                className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 font-medium rounded-lg"
-              >
-                {assignedCardCode ? 'Pair Another Pass' : 'Pair Card'}
-              </a>
+
+              <div className="border-t border-white/[0.06] pt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] font-mono text-white/25 tracking-widest mb-1">TOTAL TAPS</p>
+                  <p className="font-serif text-3xl text-white">{tapCount}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-mono text-white/25 tracking-widest mb-2">RECENT TAPS</p>
+                  {recentTaps.length > 0 ? (
+                    <div className="space-y-1">
+                      {recentTaps.map(tap => (
+                        <div key={tap.id} className="flex items-center justify-between">
+                          <span className="text-[11px] text-white/40">
+                            {tap.city && tap.country ? `${tap.city}, ${tap.country}` : 'Unknown location'}
+                          </span>
+                          <span className="text-[10px] font-mono text-white/20">
+                            {new Date(tap.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-white/20">No taps yet</p>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <div className="flex justify-between items-center border-b border-neutral-900 pb-3">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300">{activeTab} Card Telemetry</h2>
-                <span className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
-                  LIVE STREAM
-                </span>
-              </div>
+            {/* Identity details */}
+            <form onSubmit={handleSaveProfile} className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-5">
+              <h2 className="font-serif text-lg text-white">Identity details</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Physical Taps ({activeTab})</p>
-                  <p className="text-3xl font-black text-white mt-1">{tapCount}</p>
-                </div>
-                <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Latest Tap Event</p>
-                  <p className="text-xs font-semibold text-neutral-200 mt-2">
-                    {recentTaps.length > 0
-                      ? new Date(recentTaps[0].created_at).toLocaleString()
-                      : 'No taps logged yet'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveProfile} autoComplete="off" className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
-                <h2 className="text-base font-bold text-white">{activeTab} Identity Details</h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-neutral-900">
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-                    Avatar Image
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'avatar');
-                    }}
+              {/* Avatar + Banner */}
+              <div className="grid grid-cols-2 gap-4 pb-4 border-b border-white/[0.06]">
+                <Field label="Avatar">
+                  <input type="file" accept="image/*"
                     disabled={uploadingAvatar}
-                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
+                    onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
+                    className="block w-full text-[12px] text-white/35 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-white/10 file:text-white/70 cursor-pointer"
                   />
-                  {avatarUrl && (
-                    <div className="flex items-center gap-3 pt-1">
-                      <img src={avatarUrl} alt="Avatar Preview" className="w-9 h-9 rounded-full object-cover border border-neutral-700" />
-                      <span className="text-xs text-emerald-400 font-medium">Avatar Attached</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-                    Header Banner
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'banner');
-                    }}
+                  {avatarUrl && <img src={avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-white/10 mt-1" />}
+                </Field>
+                <Field label="Banner">
+                  <input type="file" accept="image/*"
                     disabled={uploadingBanner}
-                    className="block w-full text-xs text-neutral-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
+                    onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'banner')}
+                    className="block w-full text-[12px] text-white/35 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-white/10 file:text-white/70 cursor-pointer"
                   />
-                  {bannerUrl && (
-                    <div className="flex items-center gap-3 pt-1">
-                      <img src={bannerUrl} alt="Banner Preview" className="w-14 h-8 rounded-lg object-cover border border-neutral-700" />
-                      <span className="text-xs text-emerald-400 font-medium">Banner Attached</span>
-                    </div>
-                  )}
-                </div>
+                  {bannerUrl && <img src={bannerUrl} alt="Banner" className="w-14 h-8 rounded-lg object-cover border border-white/10 mt-1" />}
+                </Field>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                    URL Slug (/p/{slug})
-                  </label>
-                  <input
-                    type="text"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                    {activeTab === 'PROFESSIONAL' ? 'Job Title' : 'Nickname / Persona'}
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                    {activeTab === 'PROFESSIONAL' ? 'Company' : 'Affiliation / Hobbies'}
-                  </label>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                    Contact Phone
-                  </label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                    Contact Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Display name">
+                  <input value={fullName} onChange={e => setFullName(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label={`URL slug (/p/${slug || '...'})`}>
+                  <input value={slug} onChange={e => setSlug(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label={activeTab === 'PROFESSIONAL' ? 'Job title' : 'Persona'}>
+                  <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label={activeTab === 'PROFESSIONAL' ? 'Company' : 'Affiliation'}>
+                  <input value={company} onChange={e => setCompany(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Phone">
+                  <input value={phone} onChange={e => setPhone(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Email">
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
+                </Field>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                  Bio / Overview
-                </label>
-                <textarea
-                  value={bio}
-                  rows={2}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white"
-                />
-              </div>
+              <Field label="Bio">
+                <textarea value={bio} rows={3} onChange={e => setBio(e.target.value)} className={inputCls} />
+              </Field>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg disabled:opacity-50"
+              <button type="submit" disabled={saving}
+                className="w-full py-3.5 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors disabled:opacity-40"
               >
-                {saving ? 'Saving Profile...' : `Save ${activeTab} Card Changes`}
+                {saving ? 'Saving…' : 'Save changes'}
               </button>
             </form>
 
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <h2 className="text-base font-bold text-white">{activeTab} Social Links</h2>
+            {/* Social links */}
+            <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-4">
+              <h2 className="font-serif text-lg text-white">Social links</h2>
 
-              <form onSubmit={handleAddLink} autoComplete="off" className="flex flex-col md:flex-row gap-3 border-b border-neutral-800 pb-4">
+              <form onSubmit={handleAddLink} className="flex flex-col sm:flex-row gap-3">
                 <input
-                  type="text"
-                  placeholder="Link Title (e.g. LinkedIn)"
-                  value={linkTitle}
-                  onChange={(e) => setLinkTitle(e.target.value)}
-                  className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
+                  placeholder="Title (e.g. LinkedIn)"
+                  value={linkTitle} onChange={e => setLinkTitle(e.target.value)}
+                  className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                 />
                 <input
-                  type="text"
-                  placeholder="URL (e.g. https://linkedin.com/...)"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
+                  placeholder="URL"
+                  value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
+                  className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                 />
-                <button
-                  type="submit"
-                  className="bg-white hover:bg-neutral-200 text-black text-xs font-bold px-5 py-2 rounded-xl transition-colors"
+                <button type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors whitespace-nowrap"
                 >
-                  Add Link
+                  Add
                 </button>
               </form>
 
               <div className="space-y-2">
-                {socialLinks.length > 0 ? (
-                  socialLinks.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
-                    >
-                      <div>
-                        <p className="font-semibold text-white">{item.title}</p>
-                        <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1"
-                      >
-                        Delete
-                      </button>
+                {socialLinks.length > 0 ? socialLinks.map(item => (
+                  <div key={item.id} className="flex items-center justify-between bg-[#1a1a1a] border border-white/[0.06] rounded-xl px-4 py-3">
+                    <div>
+                      <p className="text-[13px] text-white">{item.title}</p>
+                      <p className="text-[11px] text-white/30 truncate max-w-xs">{item.url}</p>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-neutral-500 text-center py-2">No links added to {activeTab} profile yet.</p>
+                    <button onClick={() => handleDeleteItem(item.id)}
+                      className="text-[12px] text-white/25 hover:text-red-400 transition-colors pl-4">
+                      Remove
+                    </button>
+                  </div>
+                )) : (
+                  <p className="text-[12px] text-white/20 text-center py-3">No links yet.</p>
                 )}
               </div>
             </div>
 
-            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-              <h2 className="text-base font-bold text-white">{activeTab} Payment QRs</h2>
+            {/* Payment QRs */}
+            <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-4">
+              <h2 className="font-serif text-lg text-white">Payment QR codes</h2>
 
-              <form onSubmit={handleAddQr} autoComplete="off" className="space-y-3 border-b border-neutral-800 pb-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <form onSubmit={handleAddQr} className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
-                    type="text"
-                    placeholder="Title (e.g. GCash / Maya)"
-                    value={qrTitle}
-                    onChange={(e) => setQrTitle(e.target.value)}
-                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white"
+                    placeholder="Title (e.g. GCash)"
+                    value={qrTitle} onChange={e => setQrTitle(e.target.value)}
+                    className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                   />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'qr');
-                    }}
+                  <input type="file" accept="image/*"
                     disabled={uploadingQr}
-                    className="block w-full text-xs text-neutral-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white cursor-pointer"
+                    onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'qr')}
+                    className="flex-1 text-[12px] text-white/35 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-white/10 file:text-white/70 cursor-pointer"
                   />
                 </div>
-
-                <div className="flex items-center gap-3">
+                <div className="flex gap-3">
                   <input
-                    type="text"
-                    placeholder="Or paste QR Image URL directly..."
-                    value={qrImageUrl}
-                    onChange={(e) => setQrImageUrl(e.target.value)}
-                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white flex-1"
+                    placeholder="Or paste QR image URL directly"
+                    value={qrImageUrl} onChange={e => setQrImageUrl(e.target.value)}
+                    className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                   />
-                  <button
-                    type="submit"
-                    disabled={!qrTitle || !qrImageUrl}
-                    className="bg-white hover:bg-neutral-200 text-black text-xs font-bold px-5 py-2 rounded-xl transition-colors disabled:opacity-40"
+                  <button type="submit" disabled={!qrTitle || !qrImageUrl}
+                    className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors disabled:opacity-40 whitespace-nowrap"
                   >
                     Add QR
                   </button>
@@ -797,36 +609,36 @@ function DashboardContent() {
               </form>
 
               <div className="space-y-2">
-                {qrCodes.length > 0 ? (
-                  qrCodes.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img src={item.url} alt={item.title} className="w-9 h-9 object-cover rounded-lg border border-neutral-700 bg-white" />
-                        <div>
-                          <p className="font-semibold text-white">{item.title}</p>
-                          <p className="text-xs text-neutral-500 truncate max-w-xs">{item.url}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1"
-                      >
-                        Delete
-                      </button>
+                {qrCodes.length > 0 ? qrCodes.map(item => (
+                  <div key={item.id} className="flex items-center justify-between bg-[#1a1a1a] border border-white/[0.06] rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <img src={item.url} alt={item.title} className="w-9 h-9 rounded-lg object-cover bg-white border border-white/10" />
+                      <p className="text-[13px] text-white">{item.title}</p>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-neutral-500 text-center py-2">No payment QRs added yet.</p>
+                    <button onClick={() => handleDeleteItem(item.id)}
+                      className="text-[12px] text-white/25 hover:text-red-400 transition-colors pl-4">
+                      Remove
+                    </button>
+                  </div>
+                )) : (
+                  <p className="text-[12px] text-white/20 text-center py-3">No QR codes yet.</p>
                 )}
               </div>
             </div>
 
+            {/* View live card */}
+            {slug && (
+              <div className="text-center pt-2 pb-4">
+                <a href={`/p/${slug}`} target="_blank" rel="noreferrer"
+                  className="text-[13px] text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px"
+                >
+                  View your live card →
+                </a>
+              </div>
+            )}
+
           </div>
         )}
-
       </div>
     </main>
   );
@@ -834,7 +646,11 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-neutral-500 text-xs">Loading command center...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <p className="text-[12px] font-mono text-white/25 tracking-widest">Loading...</p>
+      </div>
+    }>
       <DashboardContent />
     </Suspense>
   );
