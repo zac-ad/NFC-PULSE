@@ -44,11 +44,8 @@ export default async function TapRouterPage({ params }: PageProps) {
       user_agent: ua,
     });
 
-    // Increment tap_count on the card row — this is what the dashboard displays
-    await supabase
-      .from('hardware_cards')
-      .update({ tap_count: (card.tap_count || 0) + 1 })
-      .eq('id', card.id);
+    // Atomic increment via RPC — no race condition on concurrent taps
+    await supabase.rpc('increment_tap_count', { card_id: card.id });
 
     const profileSlug = card.profiles?.slug;
     if (profileSlug) redirect(`/p/${profileSlug}`);

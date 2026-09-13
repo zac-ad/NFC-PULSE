@@ -43,11 +43,19 @@ export default function EnterpriseEmployeeProfilePage() {
   };
 
   const logTapEvent = async () => {
-    // Optional telemetry logging for enterprise taps
     try {
-      await supabase.from('card_taps').insert({
-        card_code: code,
-      });
+      const { data: card } = await supabase
+        .from('hardware_cards')
+        .select('id, profile_id')
+        .eq('card_code', code)
+        .maybeSingle();
+      if (card?.id) {
+        await supabase.from('card_taps').insert({
+          card_id: card.id,
+          profile_id: card.profile_id || null,
+        });
+        await supabase.rpc('increment_tap_count', { card_id: card.id });
+      }
     } catch {}
   };
 
