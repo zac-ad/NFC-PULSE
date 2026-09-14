@@ -522,10 +522,13 @@ export default function LandingPage() {
         <footer className="border-t border-white/[0.05] px-6 py-10">
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-white/20 font-mono">
             <span>PULSE · {new Date().getFullYear()}</span>
-            <div className="flex gap-8">
+            <div className="flex gap-6 flex-wrap justify-center">
               <Link href="/portal/professional/login" className="hover:text-white/50 transition-colors">Professional</Link>
               <Link href="/portal/personal/login"     className="hover:text-white/50 transition-colors">Personal</Link>
               <Link href="/enterprise/login"          className="hover:text-white/50 transition-colors">Enterprise</Link>
+              <Link href="/privacy"                   className="hover:text-white/50 transition-colors">Privacy</Link>
+              <Link href="/terms"                     className="hover:text-white/50 transition-colors">Terms</Link>
+              <Link href="/refund"                    className="hover:text-white/50 transition-colors">Refunds</Link>
             </div>
             <span>Business cards were made for paper.</span>
           </div>
