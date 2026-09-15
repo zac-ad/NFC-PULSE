@@ -55,8 +55,12 @@ export default function TermsPage() {
             body: 'These Terms are governed by the laws of the Republic of the Philippines. Disputes shall be subject to the exclusive jurisdiction of the courts of the Philippines.',
           },
           {
-            title: '9. Contact',
-            body: 'Questions about these Terms: legal@nfc-pulse.app',
+            title: '9. Who operates PULSE',
+            body: `PULSE is operated by Isaac Salasiban, an individual based in Calamba, Laguna, Philippines. PULSE is not currently registered as a formal business entity (DTI or SEC) — it is operated as a sole individual undertaking. This does not exempt PULSE from applicable consumer protection or data privacy law, both of which apply regardless of registration status.`,
+          },
+          {
+            title: '10. Contact',
+            body: 'Questions about these Terms: pulse.companynfc@gmail.com',
           },
         ].map(({ title, body }) => (
           <section key={title} className="space-y-3 border-t border-white/[0.06] pt-8">

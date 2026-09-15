@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
         {[
           {
             title: '1. Who we are',
-            body: `PULSE ("we", "us", "our") is a digital identity platform that connects physical NFC cards to live profiles. We are operated as an independent service. For data concerns, contact us at privacy@nfc-pulse.app.`,
+            body: `PULSE ("we", "us", "our") is a digital identity platform that connects physical NFC cards to live profiles. PULSE is operated by Isaac Salasiban, an individual based in Calamba, Laguna, Philippines. PULSE is not currently registered as a business entity (DTI or SEC) — it is operated as a sole individual undertaking. For data concerns, contact pulse.companynfc@gmail.com.`,
           },
           {
             title: '2. What data we collect',
@@ -63,11 +63,11 @@ Each provider has its own privacy policy and data processing agreements.`,
 • Object to or withdraw consent for data processing.
 • Request erasure of your data from our systems.
 • File a complaint with the National Privacy Commission (privacy.gov.ph).
-To exercise any of these rights, email privacy@nfc-pulse.app. We will respond within 15 business days.`,
+To exercise any of these rights, email pulse.companynfc@gmail.com. We will respond within 15 business days.`,
           },
           {
             title: '8. Data retention',
-            body: `We retain your account and profile data for as long as your account is active. Tap telemetry is retained for 12 months. You may request deletion of your account and all associated data at any time by emailing privacy@nfc-pulse.app.`,
+            body: `We retain your account and profile data for as long as your account is active. Tap telemetry is retained for 12 months. You may request deletion of your account and all associated data at any time by emailing pulse.companynfc@gmail.com.`,
           },
           {
             title: '9. Children',
@@ -79,7 +79,7 @@ To exercise any of these rights, email privacy@nfc-pulse.app. We will respond wi
           },
           {
             title: '11. Contact',
-            body: `For any privacy-related concerns:\nEmail: privacy@nfc-pulse.app\nPULSE, Philippines`,
+            body: `For any privacy-related concerns:\nEmail: pulse.companynfc@gmail.com\nOperated by: Isaac Salasiban\nLocation: Calamba, Laguna, Philippines`,
           },
         ].map(({ title, body }) => (
           <section key={title} className="space-y-3 border-t border-white/[0.06] pt-8">

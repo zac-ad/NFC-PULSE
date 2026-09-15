@@ -18,7 +18,7 @@ export default function RefundPolicyPage() {
             title: 'Physical NFC cards',
             body: `Because each card is manufactured, paired, and encoded specifically for your profile, we do not accept returns or offer refunds on physical cards once they have been activated and linked to a profile.
 
-If your card arrives damaged or defective, contact us within 7 days of receiving it at support@nfc-pulse.app with a photo of the defect. We will replace defective cards at no charge.`,
+If your card arrives damaged or defective, contact us within 7 days of receiving it at pulse.companynfc@gmail.com with a photo of the defect. We will replace defective cards at no charge.`,
           },
           {
             title: 'Service subscriptions',
@@ -30,7 +30,7 @@ If your card arrives damaged or defective, contact us within 7 days of receiving
           },
           {
             title: 'Contact',
-            body: 'Refund or defect claims: support@nfc-pulse.app',
+            body: 'Refund or defect claims: pulse.companynfc@gmail.com',
           },
         ].map(({ title, body }) => (
           <section key={title} className="space-y-3 border-t border-white/[0.06] pt-8">

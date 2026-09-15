@@ -43,7 +43,7 @@ We do NOT use:
           },
           {
             title: 'Contact',
-            body: 'Cookie-related questions: privacy@nfc-pulse.app',
+            body: 'Cookie-related questions: pulse.companynfc@gmail.com',
           },
         ].map(({ title, body }) => (
           <section key={title} className="space-y-3 border-t border-white/[0.06] pt-8">
