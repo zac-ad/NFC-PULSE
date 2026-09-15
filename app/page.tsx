@@ -526,6 +526,7 @@ export default function LandingPage() {
               <Link href="/portal/professional/login" className="hover:text-white/50 transition-colors">Professional</Link>
               <Link href="/portal/personal/login"     className="hover:text-white/50 transition-colors">Personal</Link>
               <Link href="/enterprise/login"          className="hover:text-white/50 transition-colors">Enterprise</Link>
+              <Link href="/support"                   className="hover:text-white/50 transition-colors">Support</Link>
               <Link href="/privacy"                   className="hover:text-white/50 transition-colors">Privacy</Link>
               <Link href="/terms"                     className="hover:text-white/50 transition-colors">Terms</Link>
               <Link href="/refund"                    className="hover:text-white/50 transition-colors">Refunds</Link>
