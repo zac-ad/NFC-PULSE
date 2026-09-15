@@ -248,7 +248,7 @@ export default function LandingPage() {
                       </>
                     ) : (
                       <div className="h-full flex items-center justify-center">
-                        <span className="text-[10px] font-mono text-white/15">waiting</span>
+                        <span className="text-[10px] font-mono text-white/30">waiting</span>
                       </div>
                     )}
                   </div>

@@ -16,6 +16,7 @@ function ActivateContent() {
 
   const [cardCode, setCardCode] = useState('');
   const [fullName, setFullName] = useState('');
+  const [consent, setConsent] = useState(false);
   const [email, setEmail] = useState('');
   const [slug, setSlug] = useState('');
 
@@ -41,6 +42,10 @@ function ActivateContent() {
     e.preventDefault();
     if (!cardCode || !email || !slug || !fullName || !profileType) {
       setMessage({ type: 'error', text: 'Please fill in all required fields.' });
+      return;
+    }
+    if (!consent) {
+      setMessage({ type: 'error', text: 'Please agree to the Terms and Privacy Policy to continue.' });
       return;
     }
 
@@ -285,66 +290,96 @@ function ActivateContent() {
 
         <form onSubmit={handleActivate} autoComplete="off" className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+            <label htmlFor="activate-card-code" className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Hardware Card Code
             </label>
             <input
+              id="activate-card-code"
               type="text"
               value={cardCode}
               onChange={(e) => setCardCode(e.target.value.toUpperCase())}
               placeholder="E.G. CARD-9002"
               required
+              aria-required="true"
               className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+            <label htmlFor="activate-full-name" className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Full Name
             </label>
             <input
+              id="activate-full-name"
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Isaac Salasiban"
               required
+              aria-required="true"
               className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+            <label htmlFor="activate-email" className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Email Address
             </label>
             <input
+              id="activate-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@domain.com"
               required
+              aria-required="true"
               className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+            <label htmlFor="activate-slug" className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Desired Profile Slug
             </label>
             <input
+              id="activate-slug"
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
               placeholder={profileType === 'PROFESSIONAL' ? 'e.g. isaac' : 'e.g. isaac-personal'}
               required
+              aria-required="true"
               className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600"
             />
             <p className="text-[11px] text-neutral-500 mt-1">Your public URL will be: /p/{slug || 'your-slug'}</p>
           </div>
 
+          <label htmlFor="activate-consent" className="flex items-start gap-2.5 cursor-pointer pt-1">
+            <input
+              id="activate-consent"
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              required
+              aria-required="true"
+              className="mt-0.5 w-4 h-4 shrink-0 accent-white cursor-pointer"
+            />
+            <span className="text-[11px] text-neutral-400 leading-relaxed">
+              I agree to PULSE&rsquo;s{' '}
+              <a href="/terms" target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-white border-b border-neutral-600 pb-px">
+                Terms
+              </a>{' '}
+              and{' '}
+              <a href="/privacy" target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-white border-b border-neutral-600 pb-px">
+                Privacy Policy
+              </a>, including tap location logging for this card.
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg disabled:opacity-50 mt-2"
+            disabled={loading || !consent}
+            className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:scale-95 transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {loading ? 'Activating Pass...' : 'Claim & Activate Hardware Pass'}
           </button>

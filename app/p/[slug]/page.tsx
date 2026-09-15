@@ -397,7 +397,7 @@ export default function PublicProfilePage() {
 
         {/* Footer */}
         <footer className="text-center pt-4 pb-2 space-y-3">
-          <p className="text-[11px] font-mono text-white/15 tracking-widest">
+          <p className="text-[11px] font-mono text-white/30 tracking-widest">
             PULSE
           </p>
         </footer>

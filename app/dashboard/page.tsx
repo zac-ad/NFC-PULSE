@@ -547,6 +547,7 @@ function DashboardContent() {
                       <p className="text-[11px] text-white/30 truncate max-w-xs">{item.url}</p>
                     </div>
                     <button onClick={() => handleDeleteItem(item.id)}
+                      aria-label={`Remove link: ${item.title}`}
                       className="text-[12px] text-white/25 hover:text-red-400 transition-colors pl-4">
                       Remove
                     </button>
@@ -594,6 +595,7 @@ function DashboardContent() {
                       <p className="text-[13px] text-white">{item.title}</p>
                     </div>
                     <button onClick={() => handleDeleteItem(item.id)}
+                      aria-label={`Remove QR code: ${item.title}`}
                       className="text-[12px] text-white/25 hover:text-red-400 transition-colors pl-4">
                       Remove
                     </button>

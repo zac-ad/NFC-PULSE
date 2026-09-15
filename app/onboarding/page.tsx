@@ -76,7 +76,7 @@ export default function OnboardingPage() {
       </div>
 
       <footer className="max-w-xl mx-auto w-full pt-8 pb-2 text-center">
-        <p className="text-[11px] font-mono text-white/15 tracking-widest">PULSE</p>
+        <p className="text-[11px] font-mono text-white/30 tracking-widest">PULSE</p>
       </footer>
     </main>
   );

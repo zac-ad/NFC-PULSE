@@ -10,6 +10,7 @@ function SignUpForm() {
   const isPro = preset === 'PROFESSIONAL';
 
   const [email, setEmail] = useState('');
+  const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
@@ -18,6 +19,10 @@ function SignUpForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!consent) {
+      setError('Please agree to the Privacy Policy and Terms to continue.');
+      return;
+    }
     setLoading(true); setError('');
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
@@ -31,6 +36,11 @@ function SignUpForm() {
     setLoading(false);
   };
 
+  const mutedCls = isPro ? 'text-white/40' : 'text-black/40';
+  const linkCls = isPro
+    ? 'text-white/60 hover:text-white border-white/20'
+    : 'text-black/60 hover:text-black border-black/20';
+
   return (
     <div className={`w-full max-w-sm space-y-8 ${!isPro ? 'text-black' : ''}`}>
       <div>
@@ -43,7 +53,7 @@ function SignUpForm() {
         <h1 className={`font-serif text-3xl mt-6 ${isPro ? 'text-white' : 'text-black'}`}>
           {isPro ? 'Professional identity.' : 'Personal identity.'}
         </h1>
-        <p className={`text-[14px] mt-2 ${isPro ? 'text-white/40' : 'text-black/40'}`}>
+        <p className={`text-[14px] mt-2 ${mutedCls}`}>
           We&rsquo;ll send an activation link to your email.
         </p>
       </div>
@@ -53,29 +63,64 @@ function SignUpForm() {
           isPro ? 'bg-[#141414] border-white/10' : 'bg-white border-black/10'
         }`}>
           <p className={`font-serif text-base ${isPro ? 'text-white' : 'text-black'}`}>Link sent.</p>
-          <p className={`text-[13px] leading-relaxed ${isPro ? 'text-white/40' : 'text-black/40'}`}>
+          <p className={`text-[13px] leading-relaxed ${mutedCls}`}>
             Check <span className={isPro ? 'text-white/70' : 'text-black/70'}>{email}</span> to activate your profile.
           </p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@email.com"
-            required
-            className={`w-full rounded-xl px-4 py-3.5 text-[14px] focus:outline-none ${
-              isPro
-                ? 'bg-[#141414] border border-white/[0.08] text-white placeholder:text-white/20 focus:border-white/20'
-                : 'bg-white border border-black/[0.08] text-black placeholder:text-black/25 focus:border-black/20'
-            }`}
-          />
-          {error && <p className="text-[12px] text-red-400">{error}</p>}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="signup-email"
+              className={`block text-[11px] font-medium tracking-wide ${mutedCls}`}
+            >
+              Email address
+            </label>
+            <input
+              id="signup-email"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@email.com"
+              required
+              aria-required="true"
+              className={`w-full rounded-xl px-4 py-3.5 text-[14px] focus:outline-none ${
+                isPro
+                  ? 'bg-[#141414] border border-white/[0.08] text-white placeholder:text-white/20 focus:border-white/20'
+                  : 'bg-white border border-black/[0.08] text-black placeholder:text-black/25 focus:border-black/20'
+              }`}
+            />
+          </div>
+
+          <label htmlFor="signup-consent" className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              id="signup-consent"
+              type="checkbox"
+              checked={consent}
+              onChange={e => setConsent(e.target.checked)}
+              required
+              aria-required="true"
+              className="mt-0.5 w-4 h-4 shrink-0 accent-white cursor-pointer"
+            />
+            <span className={`text-[12px] leading-relaxed ${mutedCls}`}>
+              I agree to PULSE&rsquo;s{' '}
+              <Link href="/terms" target="_blank" className={`border-b pb-px ${linkCls}`}>
+                Terms &amp; Conditions
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" target="_blank" className={`border-b pb-px ${linkCls}`}>
+                Privacy Policy
+              </Link>
+              , including the collection of tap location data described there.
+            </span>
+          </label>
+
+          {error && <p className="text-[12px] text-red-400" role="alert">{error}</p>}
+
           <button
             type="submit"
-            disabled={loading}
-            className={`w-full py-3.5 rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-40 ${
+            disabled={loading || !consent}
+            className={`w-full py-3.5 rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               isPro
                 ? 'bg-white text-black hover:bg-[#f2f0eb]'
                 : 'bg-black text-white hover:bg-[#1a1a1a]'

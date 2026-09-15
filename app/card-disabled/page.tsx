@@ -27,7 +27,7 @@ export default function CardDisabledPage() {
           </Link>
         </div>
 
-        <p className="text-[11px] font-mono text-white/15 tracking-widest">PULSE</p>
+        <p className="text-[11px] font-mono text-white/30 tracking-widest">PULSE</p>
       </div>
     </main>
   );
