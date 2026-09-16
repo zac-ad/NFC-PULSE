@@ -23,14 +23,10 @@ export default function AdminDashboardClient() {
   const [loading, setLoading]   = useState(true);
   const [newCode, setNewCode]   = useState('');
   const [search, setSearch]     = useState('');
-  const [tab, setTab]           = useState<'cards' | 'users'>('cards');
+  const [tab, setTab]           = useState<'cards' | 'users' | 'activity'>('cards');
+  const [actions, setActions]   = useState<{ id: string; action: string; card_code: string | null; detail: string | null; created_at: string }[]>([]);
   const [confirm, setConfirm]   = useState<ConfirmModal | null>(null);
   const [message, setMessage]   = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  useEffect(() => {
-    document.title = 'PULSE | Fleet Command';
-    fetchCards();
-  }, []);
 
   const fetchCards = async () => {
     setLoading(true);
@@ -41,6 +37,25 @@ export default function AdminDashboardClient() {
     setCards(data || []);
     setLoading(false);
   };
+
+  const fetchActions = async () => {
+    const { data } = await supabase
+      .from('admin_actions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setActions(data || []);
+  };
+
+  useEffect(() => {
+    document.title = 'PULSE | Fleet Command';
+    // Fetch-on-mount pattern used throughout this codebase (dashboard,
+    // enterprise dashboard, etc.) — pre-existing, not specific to this
+    // file. See EnterpriseDashboardClient.tsx for the fuller note.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCards();
+    fetchActions();
+  }, []);
 
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,21 +68,32 @@ export default function AdminDashboardClient() {
     if (error) {
       setMessage({ type: 'error', text: error.message });
     } else {
+      await supabase.from('admin_actions').insert({
+        action: 'REGISTER_CARD',
+        card_code: code,
+      });
       setMessage({ type: 'success', text: `Card ${code} registered.` });
       setNewCode('');
       fetchCards();
+      fetchActions();
     }
   };
 
   const handleToggleStatus = async (card: HardwareCard) => {
     const next = card.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE';
     await supabase.from('hardware_cards').update({ status: next }).eq('id', card.id);
+    await supabase.from('admin_actions').insert({
+      action: next === 'DEACTIVATED' ? 'DISABLE_CARD' : 'ENABLE_CARD',
+      card_code: card.card_code,
+      detail: card.profiles?.email ? `Linked to ${card.profiles.email}` : null,
+    });
     setCards(prev => prev.map(c => c.id === card.id ? { ...c, status: next } : c));
     setConfirm(null);
     setMessage({
       type: 'success',
       text: `${card.card_code} ${next === 'DEACTIVATED' ? 'disabled' : 'enabled'}.`,
     });
+    fetchActions();
   };
 
   const filtered = cards.filter(c => {
@@ -207,21 +233,23 @@ export default function AdminDashboardClient() {
         {/* Tabs */}
         <div className="flex items-center justify-between">
           <div className="flex gap-1 bg-[#141414] border border-white/[0.06] rounded-xl p-1">
-            {(['cards', 'users'] as const).map(t => (
+            {(['cards', 'users', 'activity'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
                 className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors capitalize ${
                   tab === t ? 'bg-white text-black' : 'text-white/35 hover:text-white'
                 }`}>
-                {t === 'cards' ? `Cards (${counts.total})` : `Users (${users.length})`}
+                {t === 'cards' ? `Cards (${counts.total})` : t === 'users' ? `Users (${users.length})` : 'Activity'}
               </button>
             ))}
           </div>
-          <input
-            type="search" value={search} aria-label="Search"
-            onChange={e => setSearch(e.target.value)}
-            placeholder={tab === 'cards' ? 'Search card, name, email…' : 'Search name or email…'}
-            className="bg-[#141414] border border-white/[0.08] text-white rounded-xl px-4 py-2 text-[12px] placeholder:text-white/20 focus:outline-none focus:border-white/20 w-56"
-          />
+          {tab !== 'activity' && (
+            <input
+              type="search" value={search} aria-label="Search"
+              onChange={e => setSearch(e.target.value)}
+              placeholder={tab === 'cards' ? 'Search card, name, email…' : 'Search name or email…'}
+              className="bg-[#141414] border border-white/[0.08] text-white rounded-xl px-4 py-2 text-[12px] placeholder:text-white/20 focus:outline-none focus:border-white/20 w-56"
+            />
+          )}
         </div>
 
         {/* Cards table */}
@@ -331,6 +359,48 @@ export default function AdminDashboardClient() {
                       </td>
                     </tr>
                   ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Activity log */}
+        {tab === 'activity' && (
+          <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+            <table className="w-full text-left text-[12px]">
+              <thead className="bg-[#141414] text-white/25 font-mono text-[10px] tracking-widest border-b border-white/[0.06]">
+                <tr>
+                  <th className="px-5 py-3">Action</th>
+                  <th className="px-5 py-3">Card</th>
+                  <th className="px-5 py-3">Detail</th>
+                  <th className="px-5 py-3 text-right">When</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {actions.length > 0 ? actions.map(a => (
+                  <tr key={a.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono ${
+                        a.action === 'DISABLE_CARD' ? 'bg-red-950/30 text-red-400/70 border border-red-900/30' :
+                        a.action === 'ENABLE_CARD'  ? 'bg-white/5 text-white/70 border border-white/10' :
+                        'bg-white/[0.03] text-white/40 border border-white/[0.06]'
+                      }`}>
+                        {a.action.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 font-mono font-bold text-white">{a.card_code || '—'}</td>
+                    <td className="px-5 py-4 text-white/40">{a.detail || '—'}</td>
+                    <td className="px-5 py-4 text-right text-white/30 font-mono text-[11px]">
+                      {new Date(a.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-10 text-center text-white/20 font-mono text-[11px]">
+                      No admin actions logged yet.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

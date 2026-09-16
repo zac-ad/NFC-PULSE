@@ -19,6 +19,8 @@ export default function AdminLoginPage() {
     if (res.ok) {
       router.push('/admin');
       router.refresh();
+    } else if (res.status === 429) {
+      setError('Too many attempts. Try again in 15 minutes.');
     } else {
       setError('Invalid passphrase.');
     }

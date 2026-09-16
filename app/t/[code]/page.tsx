@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,6 +16,18 @@ export default async function TapRouterPage({ params }: PageProps) {
   const cardCode = resolvedParams.code?.trim().toUpperCase();
 
   if (!cardCode) redirect('/card-disabled');
+
+  // 20 lookups per IP per minute — generous for real use (no one taps
+  // 20 different cards in a minute) but blocks a script enumerating
+  // CARD-0001 through CARD-9999 to discover which codes are real.
+  // Redirects to the same /card-disabled page as an invalid card would,
+  // rather than a distinct "rate limited" message — that way a scripted
+  // attacker can't tell the difference between "this code doesn't exist"
+  // and "you're being rate limited," which would otherwise leak useful
+  // information back to them.
+  const ip = h.get('x-forwarded-for') || 'unknown';
+  const allowed = await checkRateLimit(`tap:${ip}`, 20, 60);
+  if (!allowed) redirect('/card-disabled');
 
   const { data: card } = await supabase
     .from('hardware_cards')
