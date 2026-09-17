@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
 function ActivateContent() {
@@ -27,6 +26,9 @@ function ActivateContent() {
     document.title = 'PULSE | Activate Hardware Pass';
     const codeParam = searchParams.get('code');
     if (codeParam) {
+      // Pre-existing pattern in this codebase (same as fetch-on-mount
+      // elsewhere) — pre-filling a field from a URL param on load.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCardCode(codeParam.toUpperCase().trim());
     }
   }, [searchParams]);
@@ -53,107 +55,23 @@ function ActivateContent() {
     setMessage(null);
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      const cleanCode = cardCode.trim().toUpperCase();
-      const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-');
+      const res = await fetch('/api/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardCode: cardCode.trim().toUpperCase(),
+          fullName,
+          email: email.trim().toLowerCase(),
+          slug: slug.trim().toLowerCase().replace(/\s+/g, '-'),
+          profileType,
+          consent,
+        }),
+      });
+      const json = await res.json();
 
-      const { data: card, error: cardError } = await supabase
-        .from('hardware_cards')
-        .select('*')
-        .eq('card_code', cleanCode)
-        .maybeSingle();
-
-      if (cardError || !card) {
-        throw new Error('Invalid Hardware Card Code. Please check the code printed on your pass.');
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to activate hardware pass.');
       }
-
-      let { data: account } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('email', cleanEmail)
-        .maybeSingle();
-
-      if (!account) {
-        const { data: newAccount, error: accErr } = await supabase
-          .from('accounts')
-          .insert({ email: cleanEmail })
-          .select()
-          .single();
-
-        if (accErr || !newAccount) throw new Error('Could not set up account record.');
-        account = newAccount;
-      }
-
-      let { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('account_id', account.id)
-        .eq('profile_type', profileType)
-        .maybeSingle();
-
-      let targetProfileId: string;
-
-      if (existingProfile) {
-        const { data: updatedProf, error: upErr } = await supabase
-          .from('profiles')
-          .update({
-            full_name: fullName,
-            slug: cleanSlug,
-            is_active: true,
-          })
-          .eq('id', existingProfile.id)
-          .select()
-          .single();
-
-        if (upErr) {
-          if (upErr.message.includes('slug')) {
-            throw new Error(`The slug "${cleanSlug}" is already taken by another user.`);
-          }
-          throw upErr;
-        }
-        targetProfileId = updatedProf.id;
-      } else {
-        const { data: slugOwner } = await supabase
-          .from('profiles')
-          .select('id, account_id')
-          .eq('slug', cleanSlug)
-          .maybeSingle();
-
-        if (slugOwner && slugOwner.account_id !== account.id) {
-          throw new Error(`The slug "${cleanSlug}" is already taken by another user.`);
-        }
-
-        const { data: newProfile, error: profErr } = await supabase
-          .from('profiles')
-          .insert({
-            account_id: account.id,
-            email: cleanEmail,
-            full_name: fullName,
-            slug: cleanSlug,
-            profile_type: profileType,
-            is_active: true,
-          })
-          .select()
-          .single();
-
-        if (profErr) {
-          if (profErr.message.includes('slug')) {
-            throw new Error(`The slug "${cleanSlug}" is already taken.`);
-          }
-          throw profErr;
-        }
-        targetProfileId = newProfile.id;
-      }
-
-      const { error: bindError } = await supabase
-        .from('hardware_cards')
-        .update({
-          status: 'ACTIVE',
-          profile_id: targetProfileId,
-        })
-        .eq('id', card.id);
-
-      if (bindError) throw bindError;
 
       setMessage({
         type: 'success',
@@ -164,11 +82,9 @@ function ActivateContent() {
         router.push('/dashboard');
       }, 1500);
 
-    } catch (err: any) {
-      setMessage({
-        type: 'error',
-        text: err.message || 'Failed to activate hardware pass.',
-      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to activate hardware pass.';
+      setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }

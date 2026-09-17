@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -54,20 +55,43 @@ export default async function TapRouterPage({ params }: PageProps) {
     // to the profile's account_id. A stranger logged into their OWN
     // PULSE account who taps someone else's card still correctly lands
     // on the public profile, because the ids won't match.
-    const supabaseServerAuth = await createSupabaseServerClient();
-    const { data: { user } } = await supabaseServerAuth.auth.getUser();
+    //
+    // Everything here is wrapped in try/catch and never throws outward.
+    // This whole block only decides WHETHER to redirect to /dashboard —
+    // redirect() itself is called after, outside the try, since
+    // Next.js's redirect() works by throwing internally and a try/catch
+    // around it would swallow that throw and silently break the
+    // redirect instead of performing it. If anything here fails for any
+    // reason, isOwner just stays false and the normal tap flow below
+    // proceeds exactly as it would for a stranger — this check can
+    // never be the reason a real tap fails to resolve.
+    let isOwner = false;
+    try {
+      const supabaseServerAuth = await createSupabaseServerClient();
+      const { data: { user } } = await supabaseServerAuth.auth.getUser();
 
-    if (user?.email) {
-      const { data: account } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('email', user.email)
-        .maybeSingle();
+      if (user?.email) {
+        // Uses the service-role client, not the anon one — the
+        // "Accounts are private" RLS policy checks auth.uid() = id, but
+        // this schema keys accounts by email rather than by the
+        // Supabase auth id, so that policy would silently block this
+        // lookup via the anon key and this redirect would never fire.
+        // Safe here because it's a read-only check, server-side only,
+        // used purely to decide which page to redirect to — nothing
+        // from it is exposed to the client.
+        const { data: account } = await supabaseAdmin
+          .from('accounts')
+          .select('id')
+          .eq('email', user.email)
+          .maybeSingle();
 
-      if (account && account.id === card.profiles?.account_id) {
-        redirect('/dashboard');
+        isOwner = !!(account && account.id === card.profiles?.account_id);
       }
+    } catch (err) {
+      console.error('Owner check failed, falling back to normal tap flow:', err);
     }
+
+    if (isOwner) redirect('/dashboard');
 
     // Geo data from Vercel edge headers
     const city    = decodeURIComponent(h.get('x-vercel-ip-city')    || 'Unknown');
