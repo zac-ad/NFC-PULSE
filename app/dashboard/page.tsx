@@ -3,7 +3,14 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
+import { parseDevice } from '@/lib/parseDevice';
+
+// Module-level singleton — created once, reused across renders, so the
+// auth listener set up below doesn't get torn down and recreated on
+// every re-render of the dashboard.
+const supabaseAuth = createSupabaseBrowserClient();
 
 interface LinkItem {
   id?: string;
@@ -17,6 +24,7 @@ interface TapEvent {
   created_at: string;
   city?: string;
   country?: string;
+  user_agent?: string;
 }
 
 interface ProfileData {
@@ -48,7 +56,7 @@ const inputCls = "w-full bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4
 
 // ── Helper: get session token for API calls ───────────────────
 async function getToken(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabaseAuth.auth.getSession();
   return session?.access_token || null;
 }
 
@@ -105,43 +113,6 @@ function DashboardContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // ── Load profiles via server API ─────────────────────────────
-  const loadProfiles = useCallback(async () => {
-    const token = await getToken();
-    if (!token) { setLoading(false); return; }
-
-    const res = await fetch('/api/profile', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    const json = await res.json();
-
-    if (json.account) setUserAccount(json.account);
-
-    const fetchedProfiles: ProfileData[] = json.profiles || [];
-    setProfiles(fetchedProfiles);
-
-    const target = fetchedProfiles.find(p => p.profile_type === presetParam) || fetchedProfiles[0];
-    if (target) await selectProfileToEdit(target);
-
-    setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetParam]);
-
-  useEffect(() => {
-    document.title = 'PULSE | Dashboard';
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) { loadProfiles(); }
-      else { setLoading(false); }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) { loadProfiles(); }
-    });
-
-    return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const selectProfileToEdit = async (prof: ProfileData) => {
     setCurrentProfileId(prof.id);
     setActiveTab(prof.profile_type);
@@ -176,12 +147,48 @@ function DashboardContent() {
     // Recent taps
     const { data: tapsData } = await supabase
       .from('card_taps')
-      .select('id, created_at, city, country')
+      .select('id, created_at, city, country, user_agent')
       .eq('profile_id', prof.id)
       .order('created_at', { ascending: false })
       .limit(5);
     setRecentTaps(tapsData || []);
   };
+
+  const loadProfiles = useCallback(async () => {
+    const token = await getToken();
+    if (!token) { setLoading(false); return; }
+
+    const res = await fetch('/api/profile', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const json = await res.json();
+
+    if (json.account) setUserAccount(json.account);
+
+    const fetchedProfiles: ProfileData[] = json.profiles || [];
+    setProfiles(fetchedProfiles);
+
+    const target = fetchedProfiles.find(p => p.profile_type === presetParam) || fetchedProfiles[0];
+    if (target) await selectProfileToEdit(target);
+
+    setLoading(false);
+  }, [presetParam]);
+
+  useEffect(() => {
+    document.title = 'PULSE | Dashboard';
+
+    supabaseAuth.auth.getSession().then(({ data: { session } }) => {
+      if (session) { loadProfiles(); }
+      else { setLoading(false); }
+    });
+
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
+      if (session) { loadProfiles(); }
+    });
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleTabSwitch = async (type: 'PROFESSIONAL' | 'PERSONAL') => {
     setActiveTab(type);
@@ -210,7 +217,7 @@ function DashboardContent() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await supabaseAuth.auth.signOut();
     setUserAccount(null);
     setCurrentProfileId(null);
     setProfiles([]);
@@ -448,11 +455,16 @@ function DashboardContent() {
                   {recentTaps.length > 0 ? (
                     <div className="space-y-1">
                       {recentTaps.map(tap => (
-                        <div key={tap.id} className="flex items-center justify-between">
-                          <span className="text-[11px] text-white/40">
-                            {tap.city && tap.country ? `${tap.city}, ${tap.country}` : 'Unknown location'}
-                          </span>
-                          <span className="text-[10px] font-mono text-white/20">
+                        <div key={tap.id} className="flex items-center justify-between gap-2">
+                          <div>
+                            <span className="text-[11px] text-white/40 block">
+                              {tap.city && tap.country ? `${tap.city}, ${tap.country}` : 'Unknown location'}
+                            </span>
+                            <span className="text-[10px] text-white/20 font-mono">
+                              {parseDevice(tap.user_agent)}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono text-white/20 whitespace-nowrap">
                             {new Date(tap.created_at).toLocaleDateString()}
                           </span>
                         </div>

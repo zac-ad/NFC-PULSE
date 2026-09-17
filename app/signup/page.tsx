@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 
 function SignUpForm() {
+  const supabase = createSupabaseBrowserClient();
   const searchParams = useSearchParams();
   const preset = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
   const isPro = preset === 'PROFESSIONAL';

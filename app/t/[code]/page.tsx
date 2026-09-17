@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -39,18 +40,47 @@ export default async function TapRouterPage({ params }: PageProps) {
   if (card.status === 'DEACTIVATED') redirect('/card-disabled');
 
   if (card.status === 'ACTIVE' && card.profile_id) {
+    // ── Owner check ──────────────────────────────────────────
+    // If the phone tapping this card already has a valid PULSE login
+    // session (a cookie, readable here server-side before anything is
+    // sent back), and that session belongs to the account that owns
+    // THIS specific card, send them straight to their dashboard instead
+    // of the public profile — and skip logging it as a tap, since it's
+    // the owner checking their own card, not a real visitor.
+    //
+    // Accounts aren't keyed by auth.uid() in this schema (see
+    // lib/supabaseAdmin.ts usage elsewhere) — they're matched by email.
+    // So: get the session's email, look up that account, compare its id
+    // to the profile's account_id. A stranger logged into their OWN
+    // PULSE account who taps someone else's card still correctly lands
+    // on the public profile, because the ids won't match.
+    const supabaseServerAuth = await createSupabaseServerClient();
+    const { data: { user } } = await supabaseServerAuth.auth.getUser();
+
+    if (user?.email) {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('id')
+        .eq('email', user.email)
+        .maybeSingle();
+
+      if (account && account.id === card.profiles?.account_id) {
+        redirect('/dashboard');
+      }
+    }
+
     // Geo data from Vercel edge headers
     const city    = decodeURIComponent(h.get('x-vercel-ip-city')    || 'Unknown');
     const region  = decodeURIComponent(h.get('x-vercel-ip-region')  || 'Unknown');
     const country = h.get('x-vercel-ip-country') || 'PH';
-    const ip      = h.get('x-forwarded-for')     || '127.0.0.1';
+    const tapIp   = h.get('x-forwarded-for')     || '127.0.0.1';
     const ua      = h.get('user-agent')           || '';
 
-    // Log the tap with full geo data
+    // Log the tap with full geo + device data
     await supabase.from('card_taps').insert({
       card_id:    card.id,
       profile_id: card.profile_id,
-      ip_address: ip,
+      ip_address: tapIp,
       city,
       region,
       country,

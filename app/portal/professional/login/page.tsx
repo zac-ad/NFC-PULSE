@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 
 export default function ProfessionalLoginPage() {
+  const supabase = createSupabaseBrowserClient();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
