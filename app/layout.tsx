@@ -4,7 +4,8 @@ import './globals.css';
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // maximumScale intentionally omitted — restricting zoom is an
+  // accessibility violation; users must be able to pinch-zoom.
 };
 
 export const metadata: Metadata = {

@@ -46,12 +46,20 @@ export default function PortalGatewayPage() {
           </Link>
         </div>
 
-        <p className="text-[12px] text-white/20 text-center">
-          Don&rsquo;t have a card yet?{' '}
-          <Link href="/onboarding" className="text-white/50 hover:text-white transition-colors border-b border-white/20 pb-px">
-            Get yours.
-          </Link>
-        </p>
+        <div className="space-y-2 text-center">
+          <p className="text-[12px] text-white/20">
+            Have a card to activate?{' '}
+            <Link href="/activate" className="text-white/50 hover:text-white transition-colors border-b border-white/20 pb-px">
+              Set it up here.
+            </Link>
+          </p>
+          <p className="text-[12px] text-white/20">
+            Don&rsquo;t have a card yet?{' '}
+            <Link href="/onboarding" className="text-white/50 hover:text-white transition-colors border-b border-white/20 pb-px">
+              Get yours.
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   );
