@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
 interface HardwareCard {
@@ -10,91 +9,159 @@ interface HardwareCard {
   profile_id: string | null;
   tap_count: number;
   created_at: string;
-  profiles?: { full_name?: string; email?: string; slug?: string } | null;
+  profiles?: { full_name?: string; email?: string; slug?: string; account_id?: string } | null;
 }
 
 interface ConfirmModal {
+  type: 'disable' | 'enable' | 'release' | 'delete-user';
   card: HardwareCard;
-  action: 'disable' | 'enable';
+  label: string;
+  description: string;
+  confirmLabel: string;
+  danger: boolean;
+}
+
+async function adminFetch(url: string, method: string, body: object) {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res;
 }
 
 export default function AdminDashboardClient() {
-  const [cards, setCards]       = useState<HardwareCard[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [newCode, setNewCode]   = useState('');
-  const [search, setSearch]     = useState('');
-  const [tab, setTab]           = useState<'cards' | 'users' | 'activity'>('cards');
-  const [actions, setActions]   = useState<{ id: string; action: string; card_code: string | null; detail: string | null; created_at: string }[]>([]);
-  const [confirm, setConfirm]   = useState<ConfirmModal | null>(null);
-  const [message, setMessage]   = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [cards, setCards]     = useState<HardwareCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newCode, setNewCode] = useState('');
+  const [search, setSearch]   = useState('');
+  const [tab, setTab]         = useState<'cards' | 'users' | 'activity'>('cards');
+  const [actions, setActions] = useState<{ id: string; action: string; card_code: string | null; detail: string | null; created_at: string }[]>([]);
+  const [confirm, setConfirm] = useState<ConfirmModal | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [working, setWorking] = useState(false);
 
   const fetchCards = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('hardware_cards')
-      .select('*, profiles(full_name, email, slug)')
-      .order('created_at', { ascending: false });
-    setCards(data || []);
+    const res = await fetch('/api/admin/cards');
+    if (res.ok) {
+      const { cards: data } = await res.json();
+      setCards(data || []);
+    }
     setLoading(false);
   };
 
   const fetchActions = async () => {
-    const { data } = await supabase
-      .from('admin_actions')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    setActions(data || []);
+    const res = await fetch('/api/admin/activity');
+    if (res.ok) {
+      const { actions: data } = await res.json();
+      setActions(data || []);
+    }
   };
 
   useEffect(() => {
     document.title = 'PULSE | Fleet Command';
-    // Fetch-on-mount pattern used throughout this codebase (dashboard,
-    // enterprise dashboard, etc.) — pre-existing, not specific to this
-    // file. See EnterpriseDashboardClient.tsx for the fuller note.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCards();
     fetchActions();
   }, []);
 
+  const showMessage = (type: 'success' | 'error', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCode.trim()) return;
+    if (!newCode.trim() || working) return;
+    setWorking(true);
     setMessage(null);
     const code = newCode.trim().toUpperCase();
-    const { error } = await supabase
-      .from('hardware_cards')
-      .insert({ card_code: code, status: 'UNCLAIMED' });
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
+    const res = await adminFetch('/api/admin/cards', 'POST', { card_code: code });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showMessage('error', body.error || 'Failed to register card.');
     } else {
-      await supabase.from('admin_actions').insert({
-        action: 'REGISTER_CARD',
-        card_code: code,
-      });
-      setMessage({ type: 'success', text: `Card ${code} registered.` });
+      showMessage('success', `Card ${code} registered.`);
       setNewCode('');
       fetchCards();
       fetchActions();
     }
+    setWorking(false);
   };
 
-  const handleToggleStatus = async (card: HardwareCard) => {
-    const next = card.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE';
-    await supabase.from('hardware_cards').update({ status: next }).eq('id', card.id);
-    await supabase.from('admin_actions').insert({
-      action: next === 'DEACTIVATED' ? 'DISABLE_CARD' : 'ENABLE_CARD',
-      card_code: card.card_code,
-      detail: card.profiles?.email ? `Linked to ${card.profiles.email}` : null,
-    });
-    setCards(prev => prev.map(c => c.id === card.id ? { ...c, status: next } : c));
+  const handleConfirm = async () => {
+    if (!confirm || working) return;
+    setWorking(true);
+    const { type, card } = confirm;
+
+    if (type === 'delete-user') {
+      const res = await adminFetch('/api/admin/users', 'DELETE', {
+        account_id: card.profiles?.account_id,
+        card_code: card.card_code,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showMessage('error', body.error || 'Failed to delete user.');
+      } else {
+        showMessage('success', `User deleted. ${card.card_code} is now transferable.`);
+        fetchCards();
+        fetchActions();
+      }
+    } else {
+      const actionMap = { disable: 'disable', enable: 'enable', release: 'release' } as const;
+      const res = await adminFetch('/api/admin/cards', 'PATCH', {
+        card_id: card.id,
+        action: actionMap[type as 'disable' | 'enable' | 'release'],
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showMessage('error', body.error || 'Action failed.');
+      } else {
+        const msg =
+          type === 'disable' ? `${card.card_code} disabled.` :
+          type === 'enable'  ? `${card.card_code} enabled.` :
+          `${card.card_code} released — now transferable.`;
+        showMessage('success', msg);
+        fetchCards();
+        fetchActions();
+      }
+    }
+
     setConfirm(null);
-    setMessage({
-      type: 'success',
-      text: `${card.card_code} ${next === 'DEACTIVATED' ? 'disabled' : 'enabled'}.`,
-    });
-    fetchActions();
+    setWorking(false);
   };
+
+  const openDisable = (card: HardwareCard) => setConfirm({
+    type: 'disable', card,
+    label: 'Disable card',
+    description: `${card.card_code} will stop responding immediately. Anyone who taps it will see the deactivated screen.`,
+    confirmLabel: 'Yes, disable',
+    danger: true,
+  });
+
+  const openEnable = (card: HardwareCard) => setConfirm({
+    type: 'enable', card,
+    label: 'Enable card',
+    description: `${card.card_code} will become active again and route to its linked profile.`,
+    confirmLabel: 'Yes, enable',
+    danger: false,
+  });
+
+  const openRelease = (card: HardwareCard) => setConfirm({
+    type: 'release', card,
+    label: 'Release card',
+    description: `This will unlink ${card.card_code} from its current user and reset it to UNCLAIMED. The card becomes transferable to a new user. The user account is not deleted.`,
+    confirmLabel: 'Yes, release card',
+    danger: true,
+  });
+
+  const openDeleteUser = (card: HardwareCard) => setConfirm({
+    type: 'delete-user', card,
+    label: 'Delete user',
+    description: `This permanently deletes ${card.profiles?.full_name || 'this user'}'s account and profile. ${card.card_code} will be reset to UNCLAIMED and become transferable. This cannot be undone.`,
+    confirmLabel: 'Yes, delete user',
+    danger: true,
+  });
 
   const filtered = cards.filter(c => {
     const q = search.toLowerCase();
@@ -108,7 +175,7 @@ export default function AdminDashboardClient() {
 
   const users = cards
     .filter(c => c.profiles?.email)
-    .map(c => ({ ...c.profiles!, card_code: c.card_code, status: c.status, tap_count: c.tap_count }));
+    .map(c => ({ ...c.profiles!, card_code: c.card_code, card_id: c.id, status: c.status, tap_count: c.tap_count, card: c }));
 
   const counts = {
     total: cards.length,
@@ -117,7 +184,7 @@ export default function AdminDashboardClient() {
     deactivated: cards.filter(c => c.status === 'DEACTIVATED').length,
   };
 
-  const inputCls = "bg-[#141414] border border-white/[0.08] text-white rounded-xl px-4 py-3 text-[13px] placeholder:text-white/20 focus:outline-none focus:border-white/20";
+  const inputCls = 'bg-[#141414] border border-white/[0.08] text-white rounded-xl px-4 py-3 text-[13px] placeholder:text-white/20 focus:outline-none focus:border-white/20';
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -133,18 +200,12 @@ export default function AdminDashboardClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6">
           <div className="bg-[#141414] border border-white/10 rounded-2xl p-7 max-w-sm w-full space-y-5">
             <div>
-              <p className="font-mono text-[10px] text-white/25 tracking-widest mb-2">
-                {confirm.action === 'disable' ? 'CONFIRM DISABLE' : 'CONFIRM ENABLE'}
+              <p className="font-mono text-[10px] text-white/25 tracking-widest mb-2 uppercase">
+                {confirm.label}
               </p>
-              <h2 className="font-serif text-xl text-white">
-                {confirm.action === 'disable' ? 'Disable this card?' : 'Enable this card?'}
-              </h2>
-              <p className="text-[13px] text-white/40 mt-2 leading-relaxed">
-                {confirm.action === 'disable'
-                  ? `Card ${confirm.card.card_code} will stop responding immediately. Anyone who taps it will see the deactivated screen.`
-                  : `Card ${confirm.card.card_code} will become active again and route to its linked profile.`}
-              </p>
-              {confirm.card.profiles?.full_name && (
+              <h2 className="font-serif text-xl text-white">{confirm.label}?</h2>
+              <p className="text-[13px] text-white/40 mt-2 leading-relaxed">{confirm.description}</p>
+              {confirm.card.profiles?.full_name && confirm.type !== 'delete-user' && (
                 <p className="text-[12px] font-mono text-white/30 mt-2">
                   Linked to: {confirm.card.profiles.full_name}
                 </p>
@@ -153,19 +214,21 @@ export default function AdminDashboardClient() {
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirm(null)}
-                className="flex-1 py-3 rounded-xl border border-white/[0.08] text-white/50 text-[13px] hover:text-white transition-colors"
+                disabled={working}
+                className="flex-1 py-3 rounded-xl border border-white/[0.08] text-white/50 text-[13px] hover:text-white transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleToggleStatus(confirm.card)}
-                className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-colors ${
-                  confirm.action === 'disable'
+                onClick={handleConfirm}
+                disabled={working}
+                className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-50 ${
+                  confirm.danger
                     ? 'bg-red-500/90 text-white hover:bg-red-500'
                     : 'bg-white text-black hover:bg-[#f2f0eb]'
                 }`}
               >
-                {confirm.action === 'disable' ? 'Yes, disable' : 'Yes, enable'}
+                {working ? 'Working…' : confirm.confirmLabel}
               </button>
             </div>
           </div>
@@ -189,10 +252,10 @@ export default function AdminDashboardClient() {
           </div>
           <div className="grid grid-cols-2 gap-3 text-center">
             {[
-              { label: 'Total', value: counts.total },
-              { label: 'Active', value: counts.active },
+              { label: 'Total',     value: counts.total },
+              { label: 'Active',    value: counts.active },
               { label: 'Unclaimed', value: counts.unclaimed },
-              { label: 'Disabled', value: counts.deactivated },
+              { label: 'Disabled',  value: counts.deactivated },
             ].map(({ label, value }) => (
               <div key={label} className="bg-[#141414] border border-white/[0.06] rounded-xl px-4 py-3">
                 <p className="text-[10px] font-mono text-white/25 tracking-wider">{label}</p>
@@ -223,9 +286,9 @@ export default function AdminDashboardClient() {
               placeholder="CARD-CODE" required
               className={`flex-1 ${inputCls} font-mono uppercase`}
             />
-            <button type="submit"
-              className="px-6 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors">
-              Register
+            <button type="submit" disabled={working}
+              className="px-6 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors disabled:opacity-50">
+              {working ? 'Registering…' : 'Register'}
             </button>
           </form>
         </div>
@@ -262,7 +325,7 @@ export default function AdminDashboardClient() {
                   <th className="px-5 py-3">Owner</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Taps</th>
-                  <th className="px-5 py-3 text-right">Action</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -281,12 +344,12 @@ export default function AdminDashboardClient() {
                     </td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono ${
-                        card.status === 'ACTIVE'    ? 'bg-white/5 text-white/70 border border-white/10' :
-                        card.status === 'UNCLAIMED' ? 'bg-white/[0.03] text-white/30 border border-white/[0.06]' :
+                        card.status === 'ACTIVE'      ? 'bg-white/5 text-white/70 border border-white/10' :
+                        card.status === 'UNCLAIMED'   ? 'bg-white/[0.03] text-white/30 border border-white/[0.06]' :
                         'bg-red-950/30 text-red-400/70 border border-red-900/30'
                       }`}>
                         <span className={`w-1 h-1 rounded-full ${
-                          card.status === 'ACTIVE' ? 'bg-white/60 animate-pulse' :
+                          card.status === 'ACTIVE'    ? 'bg-white/60 animate-pulse' :
                           card.status === 'UNCLAIMED' ? 'bg-white/20' : 'bg-red-500/50'
                         }`} />
                         {card.status}
@@ -294,22 +357,26 @@ export default function AdminDashboardClient() {
                     </td>
                     <td className="px-5 py-4 text-white/40 font-mono">{card.tap_count || 0}</td>
                     <td className="px-5 py-4 text-right">
-                      {card.status !== 'UNCLAIMED' && (
-                        <button
-                          onClick={() => setConfirm({
-                            card,
-                            action: card.status === 'ACTIVE' ? 'disable' : 'enable',
-                          })}
-                          aria-label={`${card.status === 'ACTIVE' ? 'Disable' : 'Enable'} card ${card.card_code}`}
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
-                            card.status === 'ACTIVE'
-                              ? 'bg-red-950/40 text-red-400/80 hover:bg-red-950/70 border border-red-900/30'
-                              : 'bg-white/5 text-white/50 hover:bg-white/10 border border-white/[0.06]'
-                          }`}
-                        >
-                          {card.status === 'ACTIVE' ? 'Disable' : 'Enable'}
-                        </button>
-                      )}
+                      <div className="flex gap-2 justify-end">
+                        {card.status === 'ACTIVE' && (
+                          <>
+                            <button onClick={() => openRelease(card)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-amber-950/40 text-amber-400/80 hover:bg-amber-950/70 border border-amber-900/30 transition-colors">
+                              Release
+                            </button>
+                            <button onClick={() => openDisable(card)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-red-950/40 text-red-400/80 hover:bg-red-950/70 border border-red-900/30 transition-colors">
+                              Disable
+                            </button>
+                          </>
+                        )}
+                        {card.status === 'DEACTIVATED' && (
+                          <button onClick={() => openEnable(card)}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/50 hover:bg-white/10 border border-white/[0.06] transition-colors">
+                            Enable
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -334,7 +401,8 @@ export default function AdminDashboardClient() {
                   <th className="px-5 py-3">Email</th>
                   <th className="px-5 py-3">Card</th>
                   <th className="px-5 py-3">Taps</th>
-                  <th className="px-5 py-3">Live card</th>
+                  <th className="px-5 py-3">Live profile</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -351,11 +419,17 @@ export default function AdminDashboardClient() {
                       <td className="px-5 py-4 text-white/40 font-mono">{u.tap_count || 0}</td>
                       <td className="px-5 py-4">
                         {u.slug ? (
-                          <a href={`/p/${u.slug}`} target="_blank" rel="noreferrer"
+                          <a href={`/p/${u.slug}`} target="_blank" rel="noopener noreferrer"
                             className="text-white/35 hover:text-white transition-colors border-b border-white/15 pb-px text-[11px]">
                             /p/{u.slug}
                           </a>
                         ) : <span className="text-white/20">—</span>}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button onClick={() => openDeleteUser(u.card)}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-red-950/40 text-red-400/80 hover:bg-red-950/70 border border-red-900/30 transition-colors">
+                          Delete user
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -381,8 +455,10 @@ export default function AdminDashboardClient() {
                   <tr key={a.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono ${
-                        a.action === 'DISABLE_CARD' ? 'bg-red-950/30 text-red-400/70 border border-red-900/30' :
-                        a.action === 'ENABLE_CARD'  ? 'bg-white/5 text-white/70 border border-white/10' :
+                        a.action === 'DISABLE_CARD'  ? 'bg-red-950/30 text-red-400/70 border border-red-900/30' :
+                        a.action === 'DELETE_USER'   ? 'bg-red-950/30 text-red-400/70 border border-red-900/30' :
+                        a.action === 'RELEASE_CARD'  ? 'bg-amber-950/30 text-amber-400/70 border border-amber-900/30' :
+                        a.action === 'ENABLE_CARD'   ? 'bg-white/5 text-white/70 border border-white/10' :
                         'bg-white/[0.03] text-white/40 border border-white/[0.06]'
                       }`}>
                         {a.action.replace(/_/g, ' ')}
