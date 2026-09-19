@@ -1,23 +1,47 @@
 // app/api/activate/route.ts
 //
-// All of card activation's writes (accounts, profiles, hardware_cards)
-// happen here with the service-role key, not the client.
+// Activation API — calls the activate_card() Postgres function which
+// performs all writes (account, profile, card binding) in one atomic
+// transaction. If anything fails mid-way, Postgres rolls everything
+// back. No partial state, no orphaned accounts.
 //
-// Why this has to be server-side: activation happens BEFORE the person
-// has ever logged in — there's no session yet for RLS's
-// `account_id = auth.uid()` checks to compare against. The old version
-// of this page wrote directly from the browser with the anon key, which
-// worked back when RLS was looser, but broke the moment RLS was
-// tightened for the dashboard. Using the service-role key here sidesteps
-// that entirely, with validation done in this route instead of relying
-// on RLS to catch mistakes.
+// The actual business logic lives in:
+//   supabase/migrations/0003_atomic_activation.sql
+//
+// This route only handles:
+//   - Input sanitisation before passing to the function
+//   - Rate limiting (checked here, not inside SQL)
+//   - HTTP response shaping
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(request: Request) {
-  const { cardCode, fullName, email, slug, profileType, consent } = await request.json();
 
+  // Rate limit: 5 activation attempts per IP per 10 minutes.
+  // This is deliberately tighter than the tap-route limiter because
+  // activation reveals card states (404 vs 409) which could be used
+  // to enumerate valid card codes.
+  const ip = getClientIp(request);
+  const allowed = await checkRateLimit(`activation:${ip}`, 5, 600);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please wait a few minutes and try again.' },
+      { status: 429 }
+    );
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+  }
+
+  const { cardCode, fullName, email, slug, profileType, consent } = body;
+
+  // Basic presence checks before hitting the database
   if (!cardCode || !fullName || !email || !slug || !profileType) {
     return NextResponse.json({ error: 'Please fill in all fields.' }, { status: 400 });
   }
@@ -27,132 +51,65 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (profileType !== 'PROFESSIONAL' && profileType !== 'PERSONAL') {
+
+  // Sanitise inputs before passing to the SQL function.
+  // The function also validates, but doing it here means we catch
+  // obvious bad input without a round-trip to the database.
+  const cleanCode  = String(cardCode).trim().toUpperCase();
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanName  = String(fullName).trim();
+  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
+  const cleanType  = String(profileType).toUpperCase();
+
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanSlug)) {
+    return NextResponse.json(
+      { error: 'PULSE link can only contain lowercase letters, numbers, and hyphens.' },
+      { status: 400 }
+    );
+  }
+  if (cleanType !== 'PROFESSIONAL' && cleanType !== 'PERSONAL') {
     return NextResponse.json({ error: 'Invalid profile type.' }, { status: 400 });
   }
 
-  const cleanEmail = String(email).trim().toLowerCase();
-  const cleanCode  = String(cardCode).trim().toUpperCase();
-  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
+  // Call the atomic Postgres function.
+  // activate_card() always returns a JSON object with either:
+  //   { success: true, slug, profile_id, account_id }
+  //   { error: "human readable message" }
+  //
+  // It never throws — all exceptions are caught inside the function
+  // and returned as { error: "..." } — so we only need to handle the
+  // case where the RPC call itself fails (network, Supabase outage).
+  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card', {
+    p_card_code:    cleanCode,
+    p_email:        cleanEmail,
+    p_full_name:    cleanName,
+    p_slug:         cleanSlug,
+    p_profile_type: cleanType,
+  });
 
-  // 1. Card must exist AND be unclaimed.
-  const { data: card } = await supabaseAdmin
-    .from('hardware_cards')
-    .select('id, status')
-    .eq('card_code', cleanCode)
-    .maybeSingle();
-
-  if (!card) {
+  if (rpcError) {
+    // RPC transport failure — the function didn't run at all.
+    console.error('activate_card RPC error:', rpcError.message);
     return NextResponse.json(
-      { error: "We couldn't find that card. Check the code printed on your card and try again." },
-      { status: 404 }
-    );
-  }
-  if (card.status !== 'UNCLAIMED') {
-    return NextResponse.json(
-      { error: 'This card has already been activated or is no longer available.' },
-      { status: 409 }
-    );
-  }
-
-  // 2. Find or create the account.
-  let { data: account } = await supabaseAdmin
-    .from('accounts')
-    .select('id')
-    .eq('email', cleanEmail)
-    .maybeSingle();
-
-  if (!account) {
-    const { data: newAccount, error: accErr } = await supabaseAdmin
-      .from('accounts')
-      .insert({ email: cleanEmail })
-      .select('id')
-      .single();
-    if (accErr || !newAccount) {
-      return NextResponse.json({ error: 'Could not set up your account. Please try again.' }, { status: 500 });
-    }
-    account = newAccount;
-  }
-
-  // 3. Find or create the profile for this account + profile type.
-  const { data: existingProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('account_id', account.id)
-    .eq('profile_type', profileType)
-    .maybeSingle();
-
-  let targetProfileId: string;
-
-  if (existingProfile) {
-    const { data: updated, error: upErr } = await supabaseAdmin
-      .from('profiles')
-      .update({ full_name: fullName, slug: cleanSlug, is_active: true })
-      .eq('id', existingProfile.id)
-      .select('id')
-      .single();
-    if (upErr) {
-      const msg = upErr.message.includes('slug')
-        ? `That PULSE link is already taken. Try a different one.`
-        : 'Could not update your profile. Please try again.';
-      return NextResponse.json({ error: msg }, { status: 409 });
-    }
-    targetProfileId = updated.id;
-  } else {
-    const { data: slugOwner } = await supabaseAdmin
-      .from('profiles')
-      .select('id, account_id')
-      .eq('slug', cleanSlug)
-      .maybeSingle();
-
-    if (slugOwner && slugOwner.account_id !== account.id) {
-      return NextResponse.json(
-        { error: 'That PULSE link is already taken. Try a different one.' },
-        { status: 409 }
-      );
-    }
-
-    const { data: newProfile, error: profErr } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        account_id:   account.id,
-        email:        cleanEmail,
-        full_name:    fullName,
-        slug:         cleanSlug,
-        profile_type: profileType,
-        is_active:    true,
-      })
-      .select('id')
-      .single();
-
-    if (profErr || !newProfile) {
-      const msg = profErr?.message.includes('slug')
-        ? 'That PULSE link is already taken. Try a different one.'
-        : 'Could not create your profile. Please try again.';
-      return NextResponse.json({ error: msg }, { status: 409 });
-    }
-    targetProfileId = newProfile.id;
-  }
-
-  // 4. Bind the card — the `.eq('status', 'UNCLAIMED')` guard means if two
-  //    people submit the same code at the same instant, only the first wins.
-  const { data: bound, error: bindError } = await supabaseAdmin
-    .from('hardware_cards')
-    .update({ status: 'ACTIVE', profile_id: targetProfileId })
-    .eq('id', card.id)
-    .eq('status', 'UNCLAIMED')
-    .select('id')
-    .maybeSingle();
-
-  if (bindError) {
-    return NextResponse.json({ error: 'Could not activate your card. Please try again.' }, { status: 500 });
-  }
-  if (!bound) {
-    return NextResponse.json(
-      { error: 'This card was just claimed by someone else. Please contact support.' },
-      { status: 409 }
+      { error: 'Could not reach the database. Please try again.' },
+      { status: 503 }
     );
   }
 
-  return NextResponse.json({ success: true, slug: cleanSlug });
+  // The function ran — check its returned JSON for success or error.
+  const result = data as { success?: boolean; error?: string; slug?: string };
+
+  if (result.error) {
+    // Determine the right HTTP status from the error content.
+    const status =
+      result.error.includes('already been activated') ? 409 :
+      result.error.includes('PULSE link is already taken') ? 409 :
+      result.error.includes('couldn\'t find that card') ? 404 :
+      result.error.includes('being activated right now') ? 409 :
+      400;
+
+    return NextResponse.json({ error: result.error }, { status });
+  }
+
+  return NextResponse.json({ success: true, slug: result.slug });
 }
