@@ -2,8 +2,19 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { verifyAccessCode } from '@/lib/orgAuth';
 import { createOrgSessionCookieValue, COOKIE_NAME } from '@/lib/orgSession';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(request: Request) {
+  // Rate limit: 10 attempts per IP per 15 minutes
+  const ip = getClientIp(request);
+  const allowed = await checkRateLimit(`enterprise-login:${ip}`, 10, 900);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please wait before trying again.' },
+      { status: 429 }
+    );
+  }
+
   const { accessCode } = await request.json();
   if (!accessCode) return NextResponse.json({ error: 'Access code required.' }, { status: 400 });
 

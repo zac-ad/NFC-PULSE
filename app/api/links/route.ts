@@ -58,7 +58,18 @@ export async function DELETE(request: Request) {
   const owns = await verifyProfileOwnership(email, profileId);
   if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { error } = await supabaseAdmin.from('profile_links').delete().eq('id', linkId);
+  // SECURITY: scope delete to both linkId AND profileId to prevent IDOR.
+  // Without .eq('profile_id', profileId) an attacker could delete any link
+  // by supplying their own profileId (which passes ownership) + a victim's linkId.
+  const { data, error } = await supabaseAdmin
+    .from('profile_links')
+    .delete()
+    .eq('id', linkId)
+    .eq('profile_id', profileId)
+    .select('id')
+    .maybeSingle();
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'Link not found or access denied' }, { status: 404 });
   return NextResponse.json({ success: true });
 }
