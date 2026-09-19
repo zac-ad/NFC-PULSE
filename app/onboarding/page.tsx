@@ -29,8 +29,13 @@ export default function OnboardingPage() {
           <h1 className="font-serif text-[clamp(28px,5vw,44px)] leading-tight text-white">
             Which version of you<br />are you sharing?
           </h1>
+          {/* Copy updated: the old line said "Each card carries one identity"
+              which contradicts the product's "your card stays, your profile
+              changes" promise. Now correctly frames it as choosing how this
+              PULSE will represent you — one active profile, not a permanent
+              limitation. */}
           <p className="text-[14px] text-white/35 leading-relaxed max-w-sm">
-            Each card carries one identity. Choose the one this card is for.
+            Choose how this PULSE will represent you. Your profile can evolve — your card stays the same.
           </p>
         </div>
 
@@ -47,7 +52,7 @@ export default function OnboardingPage() {
               Professional
             </p>
             <p className={`text-[13px] leading-relaxed ${selected === 'PROFESSIONAL' ? 'text-black/50' : 'text-white/35'}`}>
-              Work identity. Corporate vCard, LinkedIn, tap telemetry.
+              Work identity — LinkedIn, portfolio, contact details, calendar booking.
             </p>
             <p className={`text-[12px] mt-4 font-medium ${selected === 'PROFESSIONAL' ? 'text-black/60' : 'text-white/25'}`}>
               Select →
@@ -66,13 +71,21 @@ export default function OnboardingPage() {
               Personal
             </p>
             <p className={`text-[13px] leading-relaxed ${selected === 'PERSONAL' ? 'text-black/50' : 'text-white/35'}`}>
-              Personal identity. Socials, messaging, payment handles.
+              Personal identity — socials, messaging, payment handles, links.
             </p>
             <p className={`text-[12px] mt-4 font-medium ${selected === 'PERSONAL' ? 'text-black/60' : 'text-white/25'}`}>
               Select →
             </p>
           </button>
         </div>
+
+        {/* Give card holders a clear path — they don't need signup, they need activate */}
+        <p className="text-[12px] text-white/20 text-center">
+          Already have a PULSE card?{' '}
+          <Link href="/activate" className="text-white/50 hover:text-white transition-colors border-b border-white/20 pb-px">
+            Activate it here.
+          </Link>
+        </p>
       </div>
 
       <footer className="max-w-xl mx-auto w-full pt-8 pb-2 text-center">

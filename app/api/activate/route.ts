@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const { cardCode, fullName, email, slug, profileType, consent } = await request.json();
 
   if (!cardCode || !fullName || !email || !slug || !profileType) {
-    return NextResponse.json({ error: 'Please fill in all required fields.' }, { status: 400 });
+    return NextResponse.json({ error: 'Please fill in all fields.' }, { status: 400 });
   }
   if (!consent) {
     return NextResponse.json(
@@ -32,13 +32,10 @@ export async function POST(request: Request) {
   }
 
   const cleanEmail = String(email).trim().toLowerCase();
-  const cleanCode = String(cardCode).trim().toUpperCase();
-  const cleanSlug = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
+  const cleanCode  = String(cardCode).trim().toUpperCase();
+  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
 
-  // 1. Card must exist AND be unclaimed. This is the check the old
-  // client-side version skipped entirely — without it, re-submitting
-  // this form with an already-ACTIVE card's code would silently steal
-  // it and rebind it to a different profile.
+  // 1. Card must exist AND be unclaimed.
   const { data: card } = await supabaseAdmin
     .from('hardware_cards')
     .select('id, status')
@@ -47,7 +44,7 @@ export async function POST(request: Request) {
 
   if (!card) {
     return NextResponse.json(
-      { error: 'Invalid hardware card code. Please check the code printed on your pass.' },
+      { error: "We couldn't find that card. Check the code printed on your card and try again." },
       { status: 404 }
     );
   }
@@ -72,7 +69,7 @@ export async function POST(request: Request) {
       .select('id')
       .single();
     if (accErr || !newAccount) {
-      return NextResponse.json({ error: 'Could not set up account record.' }, { status: 500 });
+      return NextResponse.json({ error: 'Could not set up your account. Please try again.' }, { status: 500 });
     }
     account = newAccount;
   }
@@ -96,8 +93,8 @@ export async function POST(request: Request) {
       .single();
     if (upErr) {
       const msg = upErr.message.includes('slug')
-        ? `The slug "${cleanSlug}" is already taken by another user.`
-        : upErr.message;
+        ? `That PULSE link is already taken. Try a different one.`
+        : 'Could not update your profile. Please try again.';
       return NextResponse.json({ error: msg }, { status: 409 });
     }
     targetProfileId = updated.id;
@@ -110,7 +107,7 @@ export async function POST(request: Request) {
 
     if (slugOwner && slugOwner.account_id !== account.id) {
       return NextResponse.json(
-        { error: `The slug "${cleanSlug}" is already taken by another user.` },
+        { error: 'That PULSE link is already taken. Try a different one.' },
         { status: 409 }
       );
     }
@@ -118,30 +115,27 @@ export async function POST(request: Request) {
     const { data: newProfile, error: profErr } = await supabaseAdmin
       .from('profiles')
       .insert({
-        account_id: account.id,
-        email: cleanEmail,
-        full_name: fullName,
-        slug: cleanSlug,
+        account_id:   account.id,
+        email:        cleanEmail,
+        full_name:    fullName,
+        slug:         cleanSlug,
         profile_type: profileType,
-        is_active: true,
+        is_active:    true,
       })
       .select('id')
       .single();
 
     if (profErr || !newProfile) {
       const msg = profErr?.message.includes('slug')
-        ? `The slug "${cleanSlug}" is already taken.`
-        : profErr?.message || 'Could not create profile.';
+        ? 'That PULSE link is already taken. Try a different one.'
+        : 'Could not create your profile. Please try again.';
       return NextResponse.json({ error: msg }, { status: 409 });
     }
     targetProfileId = newProfile.id;
   }
 
-  // 4. Bind the card — the `.eq('status', 'UNCLAIMED')` here (not just
-  // `.eq('id', card.id)`) means if two people submitted the same
-  // unclaimed code at almost the same instant, only the first update
-  // actually succeeds; the second silently affects zero rows instead of
-  // overwriting the first person's binding.
+  // 4. Bind the card — the `.eq('status', 'UNCLAIMED')` guard means if two
+  //    people submit the same code at the same instant, only the first wins.
   const { data: bound, error: bindError } = await supabaseAdmin
     .from('hardware_cards')
     .update({ status: 'ACTIVE', profile_id: targetProfileId })
@@ -151,11 +145,11 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (bindError) {
-    return NextResponse.json({ error: bindError.message }, { status: 500 });
+    return NextResponse.json({ error: 'Could not activate your card. Please try again.' }, { status: 500 });
   }
   if (!bound) {
     return NextResponse.json(
-      { error: 'This card was just claimed by someone else. Please try a different card.' },
+      { error: 'This card was just claimed by someone else. Please contact support.' },
       { status: 409 }
     );
   }

@@ -84,7 +84,7 @@ function ActivateContent() {
       return;
     }
     if (slugError) {
-      setMessage({ type: 'error', text: 'Fix the slug before continuing.' });
+      setMessage({ type: 'error', text: 'Fix your PULSE link before continuing.' });
       return;
     }
     if (!SLUG_RE.test(slug)) {
@@ -364,7 +364,7 @@ function ActivateContent() {
             {/* Slug */}
             <div className="space-y-1.5">
               <label htmlFor="slug" className="block font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">
-                Profile URL
+                Your PULSE link
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] text-[#f2f0eb]/25 pointer-events-none select-none">
@@ -384,7 +384,7 @@ function ActivateContent() {
                 <p className="text-[11px] text-red-400">{slugError}</p>
               ) : (
                 <p className="text-[11px] text-[#f2f0eb]/25">
-                  Lowercase letters, numbers, and hyphens only. This is permanent.
+                  Letters, numbers, and hyphens only. This will be your permanent PULSE link.
                 </p>
               )}
             </div>
@@ -431,7 +431,7 @@ export default function ActivatePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="font-mono text-[11px] text-[#f2f0eb]/20 tracking-widest">Loading…</p>
+        <p className="font-mono text-[11px] text-[#f2f0eb]/20 tracking-widest">PULSE</p>
       </div>
     }>
       <ActivateContent />
