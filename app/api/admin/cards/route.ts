@@ -1,34 +1,34 @@
 // app/api/admin/cards/route.ts
+// Auth: requireAdmin() — authentication + Origin check on mutations
+// Authz: service_role only; anon/authenticated cannot reach supabaseAdmin
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { verifyAdminSession } from '@/lib/adminAuth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireAdmin } from '@/lib/requireAdmin';
 
-async function requireAdmin(): Promise<boolean> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session');
-  return !!(session && verifyAdminSession(session.value));
-}
-
-// GET — fetch all cards with profile info
-export async function GET() {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const check = await requireAdmin(request, { skipOriginCheck: true });
+  if (!check.ok) return check.response;
 
   const { data, error } = await supabaseAdmin
     .from('hardware_cards')
     .select('*, profiles(full_name, email, slug, account_id)')
     .order('created_at', { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[admin/cards GET]', error.message);
+    return NextResponse.json({ error: 'Could not load cards.' }, { status: 500 });
+  }
   return NextResponse.json({ cards: data });
 }
 
-// POST — register a new card
 export async function POST(request: Request) {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const check = await requireAdmin(request);
+  if (!check.ok) return check.response;
 
   const { card_code } = await request.json();
-  if (!card_code?.trim()) return NextResponse.json({ error: 'card_code required' }, { status: 400 });
+  if (!card_code?.trim()) {
+    return NextResponse.json({ error: 'Card code is required.' }, { status: 400 });
+  }
 
   const code = card_code.trim().toUpperCase();
 
@@ -38,23 +38,31 @@ export async function POST(request: Request) {
     .select('id, card_code')
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[admin/cards POST]', error.message);
+    const msg = error.message.includes('unique')
+      ? `Card code ${code} already exists.`
+      : 'Could not register card. Please try again.';
+    return NextResponse.json({ error: msg }, { status: 409 });
+  }
 
   await supabaseAdmin.from('admin_actions').insert({
     action: 'REGISTER_CARD',
     card_code: code,
-    detail: 'Registered via admin panel',
+    detail: `Registered via admin panel (session: ${check.session.id})`,
   });
 
   return NextResponse.json({ success: true, card: data });
 }
 
-// PATCH — disable / enable / release a card
 export async function PATCH(request: Request) {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const check = await requireAdmin(request);
+  if (!check.ok) return check.response;
 
   const { card_id, action } = await request.json();
-  if (!card_id || !action) return NextResponse.json({ error: 'card_id and action required' }, { status: 400 });
+  if (!card_id || !action) {
+    return NextResponse.json({ error: 'card_id and action are required.' }, { status: 400 });
+  }
 
   const { data: card } = await supabaseAdmin
     .from('hardware_cards')
@@ -62,21 +70,33 @@ export async function PATCH(request: Request) {
     .eq('id', card_id)
     .maybeSingle();
 
-  if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  if (!card) return NextResponse.json({ error: 'Card not found.' }, { status: 404 });
 
   if (action === 'disable') {
-    if (card.status === 'UNCLAIMED') return NextResponse.json({ error: 'Cannot disable an unclaimed card' }, { status: 409 });
-    const { error } = await supabaseAdmin.from('hardware_cards').update({ status: 'DEACTIVATED' }).eq('id', card_id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await supabaseAdmin.from('admin_actions').insert({ action: 'DISABLE_CARD', card_code: card.card_code });
+    if (card.status === 'UNCLAIMED') {
+      return NextResponse.json({ error: 'Cannot disable an unclaimed card.' }, { status: 409 });
+    }
+    const { error } = await supabaseAdmin
+      .from('hardware_cards').update({ status: 'DEACTIVATED' }).eq('id', card_id);
+    if (error) return NextResponse.json({ error: 'Could not disable card.' }, { status: 500 });
+    await supabaseAdmin.from('admin_actions').insert({
+      action: 'DISABLE_CARD',
+      card_code: card.card_code,
+      detail: `Disabled by admin session ${check.session.id}`,
+    });
     return NextResponse.json({ success: true, status: 'DEACTIVATED' });
   }
 
   if (action === 'enable') {
     const nextStatus = card.profile_id ? 'ACTIVE' : 'UNCLAIMED';
-    const { error } = await supabaseAdmin.from('hardware_cards').update({ status: nextStatus }).eq('id', card_id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await supabaseAdmin.from('admin_actions').insert({ action: 'ENABLE_CARD', card_code: card.card_code });
+    const { error } = await supabaseAdmin
+      .from('hardware_cards').update({ status: nextStatus }).eq('id', card_id);
+    if (error) return NextResponse.json({ error: 'Could not enable card.' }, { status: 500 });
+    await supabaseAdmin.from('admin_actions').insert({
+      action: 'ENABLE_CARD',
+      card_code: card.card_code,
+      detail: `Enabled by admin session ${check.session.id}`,
+    });
     return NextResponse.json({ success: true, status: nextStatus });
   }
 
@@ -85,14 +105,14 @@ export async function PATCH(request: Request) {
       .from('hardware_cards')
       .update({ status: 'UNCLAIMED', profile_id: null })
       .eq('id', card_id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: 'Could not release card.' }, { status: 500 });
     await supabaseAdmin.from('admin_actions').insert({
       action: 'RELEASE_CARD',
       card_code: card.card_code,
-      detail: 'Released from user — card is now transferable',
+      detail: `Released by admin session ${check.session.id}`,
     });
     return NextResponse.json({ success: true, status: 'UNCLAIMED' });
   }
 
-  return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
 }

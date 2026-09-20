@@ -1,13 +1,22 @@
+// app/api/admin/login/route.ts
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { signAdminSession } from '@/lib/adminAuth';
+import {
+  verifyAdminPassphrase,
+  createAdminSession,
+  getAdminCookieName,
+  adminCookieOptions,
+  SESSION_DURATION_MS,
+} from '@/lib/adminAuth';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+
+// Re-export SESSION_DURATION_MS isn't directly accessible from adminAuth
+// because it's not exported — derive maxAge from the cookie duration.
+const MAX_AGE_SECONDS = 8 * 60 * 60; // 8 hours, matches SESSION_DURATION_MS
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 5 attempts per IP per 15 minutes
     const ip = getClientIp(request);
-    // 5 attempts per 15 minutes per IP — enough for genuine typos,
-    // not enough to brute-force a passphrase.
     const allowed = await checkRateLimit(`admin_login:${ip}`, 5, 900);
     if (!allowed) {
       return NextResponse.json(
@@ -17,21 +26,33 @@ export async function POST(request: Request) {
     }
 
     const { passphrase } = await request.json();
-    const validPassphrase = process.env.ADMIN_PASSPHRASE;
-    if (!validPassphrase || passphrase !== validPassphrase) {
+
+    // Timing-safe passphrase comparison
+    if (!verifyAdminPassphrase(passphrase || '')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const token = signAdminSession();
-    const cookieStore = await cookies();
-    cookieStore.set('admin_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24,
-    });
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+
+    // Create server-side session record
+    const userAgent = request.headers.get('user-agent') || '';
+    const sessionId = await createAdminSession(ip, userAgent);
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: 'Could not create session. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    // Set session cookie
+    const response = NextResponse.json({ success: true });
+    response.cookies.set(
+      getAdminCookieName(),
+      sessionId,
+      adminCookieOptions(MAX_AGE_SECONDS)
+    );
+    return response;
+
+  } catch (err) {
+    console.error('[admin/login]', err);
+    return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
   }
 }

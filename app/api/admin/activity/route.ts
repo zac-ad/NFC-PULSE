@@ -1,15 +1,12 @@
 // app/api/admin/activity/route.ts
+// Auth: requireAdmin() — GET skips Origin check (read-only)
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { verifyAdminSession } from '@/lib/adminAuth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireAdmin } from '@/lib/requireAdmin';
 
-export async function GET() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session');
-  if (!session || !verifyAdminSession(session.value)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const check = await requireAdmin(request, { skipOriginCheck: true });
+  if (!check.ok) return check.response;
 
   const { data, error } = await supabaseAdmin
     .from('admin_actions')
@@ -17,6 +14,9 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(100);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[admin/activity GET]', error.message);
+    return NextResponse.json({ error: 'Could not load activity.' }, { status: 500 });
+  }
   return NextResponse.json({ actions: data });
 }

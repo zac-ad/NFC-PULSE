@@ -59,6 +59,12 @@ export default function AdminDashboardClient() {
     }
   };
 
+
+  const handleLogout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    window.location.href = '/admin/login';
+  };
+
   useEffect(() => {
     document.title = 'PULSE | Fleet Command';
     fetchCards();
@@ -249,6 +255,12 @@ export default function AdminDashboardClient() {
             <p className="font-mono text-[10px] text-white/25 tracking-widest mb-2">ADMIN</p>
             <h1 className="font-serif text-3xl text-white">Fleet Command.</h1>
             <p className="text-[13px] text-white/35 mt-1">Manage all hardware cards and users.</p>
+          <button
+            onClick={handleLogout}
+            className="mt-4 text-[11px] font-mono text-white/20 hover:text-red-400/70 transition-colors tracking-widest"
+          >
+            SIGN OUT →
+          </button>
           </div>
           <div className="grid grid-cols-2 gap-3 text-center">
             {[
