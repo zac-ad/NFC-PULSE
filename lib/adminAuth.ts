@@ -26,7 +26,7 @@ import { supabaseAdmin } from './supabaseAdmin';
 
 // Session lifetime: 8 hours. Short enough to limit stolen-session exposure,
 // long enough for a normal admin work session.
-const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
+export const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 
 // Cookie name uses __Host- prefix:
 //   - Forces Secure flag (HTTPS only)
