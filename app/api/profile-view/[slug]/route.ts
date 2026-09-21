@@ -53,6 +53,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     .from('profile_links')
     .select('id, title, url, type')
     .eq('profile_id', profile.id)
+    .eq('visibility', 'public')
     .neq('type', 'qr')
     .order('position', { ascending: true });
 
@@ -123,8 +124,9 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   const { data: privateLinks, error: privateLinksError } = await supabaseAdmin
     .from('profile_links')
-    .select('id, title, url, type')
+    .select('id, title, url, type, visibility')
     .eq('profile_id', profile.id)
+    .eq('visibility', 'tap')
     .order('position', { ascending: true });
 
   if (privateLinksError) {
