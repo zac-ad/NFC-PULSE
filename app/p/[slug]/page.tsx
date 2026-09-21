@@ -2,7 +2,7 @@
 //
 // Live public profile page.
 //
-// When accessed via NFC tap (/t/[code] → /p/[slug]?vs=<token>):
+// When accessed via NFC tap (/t/[code] → /p/[slug]?session=1):
 //   - Validates the viewer session token
 //   - Pings /api/viewer-session every 5 minutes to refresh the 30-min timer
 //   - Activity (clicks, scrolls) also triggers a refresh (debounced 1/min)
@@ -18,7 +18,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 interface LinkItem {
@@ -353,15 +353,18 @@ function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkI
 function PublicProfilePageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const rawSlug = params?.slug;
   const slug = typeof rawSlug === 'string' ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : '';
-  const vsToken = searchParams.get('vs') || null;
+  // session=1 is only a non-secret navigation marker. The actual viewer
+  // credential is an HttpOnly cookie and is never readable by this page.
+  const sessionMode = searchParams.get('session') === '1';
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Viewer session state — only relevant when vsToken is present
+  // Viewer session state — only relevant when this navigation came from a tap
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionExpireReason, setSessionExpireReason] = useState('expired');
 
@@ -371,9 +374,9 @@ function PublicProfilePageInner() {
 
   // ── Session ping ───────────────────────────────────────────────────────────
   const pingSession = useCallback(async () => {
-    if (!vsToken || sessionExpired) return;
+    if (!sessionMode || sessionExpired) return;
     try {
-      const res = await fetch(`/api/viewer-session?vs=${vsToken}`);
+      const res = await fetch('/api/viewer-session');
       if (!res.ok) return;
       const data = await res.json();
       if (!data.active) {
@@ -383,17 +386,17 @@ function PublicProfilePageInner() {
     } catch {
       // Network failure — don't expire the session, try again next interval
     }
-  }, [vsToken, sessionExpired]);
+  }, [sessionMode, sessionExpired]);
 
   // Activity handler — debounced to max once per minute
   const handleActivity = useCallback(() => {
-    if (!vsToken || sessionExpired) return;
+    if (!sessionMode || sessionExpired) return;
     const now = Date.now();
     if (now - lastPingRef.current > 60_000) {
       lastPingRef.current = now;
       pingSession();
     }
-  }, [vsToken, sessionExpired, pingSession]);
+  }, [sessionMode, sessionExpired, pingSession]);
 
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -423,7 +426,11 @@ function PublicProfilePageInner() {
 
   // Viewer session: validate on mount, then ping every 5 minutes
   useEffect(() => {
-    if (!vsToken) return;
+    if (!sessionMode) return;
+
+    // Remove the non-secret marker from the visible/shareable URL. The
+    // HttpOnly session cookie remains available to the API.
+    router.replace(`/p/${slug}`);
 
     // Initial validation
     pingSession();
@@ -442,7 +449,7 @@ function PublicProfilePageInner() {
       window.removeEventListener('scroll', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
     };
-  }, [vsToken, pingSession, handleActivity]);
+  }, [sessionMode, pingSession, handleActivity, router, slug]);
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
