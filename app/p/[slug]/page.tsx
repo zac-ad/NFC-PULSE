@@ -10,8 +10,8 @@
 //   - Overlay never replaces the profile — it sits on top
 //
 // When accessed directly (/p/[slug] with no session marker):
-//   - Viewer session logic is completely skipped
-//   - Profile works exactly as before
+//   - The public profile layer is shown
+//   - Private contact/payment actions are not sent to the browser
 //
 // The live profile layout is NOT changed.
 
@@ -19,7 +19,6 @@
 
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 interface LinkItem {
   id: string;
@@ -160,8 +159,9 @@ function SessionExpiredOverlay({ reason }: { reason: string }) {
 }
 
 // ── Profile content ──────────────────────────────────────────────────────────
-// Identical to the original — zero layout changes.
-function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkItem[] }) {
+// The existing profile layout is preserved. Connection state only controls
+// which already-existing private actions/data are available.
+function ProfileContent({ profile, links, connected }: { profile: ProfileData; links: LinkItem[]; connected: boolean }) {
   const [openQrId, setOpenQrId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -252,8 +252,9 @@ function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkI
               )}
             </div>
 
-            {/* Quick actions */}
-            <div className="flex items-center justify-center gap-3.5 mt-5">
+            {/* Quick actions — available after a PULSE connection */}
+            {connected && (
+              <div className="flex items-center justify-center gap-3.5 mt-5">
               {profile.phone && (
                 <a href={`tel:${profile.phone}`} title="Call"
                   className="w-11 h-11 rounded-full bg-neutral-900/90 border border-neutral-800 hover:bg-neutral-800 flex items-center justify-center text-white transition-all shadow-md active:scale-95 hover:border-neutral-700">
@@ -278,10 +279,11 @@ function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkI
                   </svg>
                 </a>
               )}
-            </div>
+              </div>
+            )}
 
-            {/* Save to contacts */}
-            <div className="w-full mt-4">
+            {connected && (
+              <div className="w-full mt-4">
               <a href={`/api/vcard/${profile.slug}`}
                 className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-2xl hover:bg-neutral-200 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-[0.98]">
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -289,7 +291,9 @@ function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkI
                 </svg>
                 Save to Contacts
               </a>
-            </div>
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -314,8 +318,8 @@ function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkI
           </div>
         )}
 
-        {/* QR codes */}
-        {qrCodes.length > 0 && (
+        {/* QR codes — available after a PULSE connection */}
+        {connected && qrCodes.length > 0 && (
           <div className="space-y-2">
             <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider px-1">Payment Gateways</p>
             <div className="space-y-2">
@@ -365,6 +369,7 @@ function PublicProfilePageInner() {
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
+  const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Viewer session state — only relevant when this navigation came from a physical tap
@@ -387,12 +392,18 @@ function PublicProfilePageInner() {
           setSessionExpireReason('expired');
         }
         setSessionExpired(true);
+        setConnected(false);
+        setProfile((current) => current ? { ...current, phone: '', email: '' } : current);
+        setLinks((current) => current.filter((link) => link.type !== 'qr'));
         return;
       }
       const data = await res.json();
       if (!data.active) {
         setSessionExpired(true);
         setSessionExpireReason(data.reason || 'expired');
+        setConnected(false);
+        setProfile((current) => current ? { ...current, phone: '', email: '' } : current);
+        setLinks((current) => current.filter((link) => link.type !== 'qr'));
       }
     } catch {
       // Network failure — don't expire the session, try again next interval
@@ -414,21 +425,19 @@ function PublicProfilePageInner() {
     if (slug) {
       (async () => {
         setLoading(true);
-        const { data: profData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('slug', slug)
-          .maybeSingle();
+        try {
+          const res = await fetch(`/api/profile-view/${encodeURIComponent(slug)}`, { cache: 'no-store' });
+          const payload = await res.json();
+          const profData = payload.profile || null;
 
-        if (profData) {
-          setProfile(profData);
-          document.title = `PULSE | ${profData.full_name || 'Card'}`;
-          const { data: linkData } = await supabase
-            .from('profile_links')
-            .select('*')
-            .eq('profile_id', profData.id)
-            .order('position', { ascending: true });
-          setLinks(linkData || []);
+          if (profData) {
+            setProfile(profData);
+            setConnected(payload.connected === true);
+            setLinks(payload.links || []);
+            document.title = `PULSE | ${profData.full_name || 'Card'}`;
+          }
+        } catch (error) {
+          console.error('[profile] failed to load profile:', error);
         }
         setLoading(false);
       })();
@@ -500,7 +509,7 @@ function PublicProfilePageInner() {
   // ── Profile + optional session expired overlay ────────────────────────────
   return (
     <>
-      <ProfileContent profile={profile} links={links} />
+      <ProfileContent profile={profile} links={links} connected={connected} />
       {sessionExpired && <SessionExpiredOverlay reason={sessionExpireReason} />}
     </>
   );
