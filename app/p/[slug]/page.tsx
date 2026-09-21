@@ -25,6 +25,7 @@ interface LinkItem {
   title: string;
   url: string;
   type: 'link' | 'qr';
+  visibility: 'public' | 'tap';
 }
 
 interface ProfileData {
@@ -394,7 +395,7 @@ function PublicProfilePageInner() {
         setSessionExpired(true);
         setConnected(false);
         setProfile((current) => current ? { ...current, phone: '', email: '' } : current);
-        setLinks((current) => current.filter((link) => link.type !== 'qr'));
+        setLinks((current) => current.filter((link) => link.visibility !== 'tap'));
         return;
       }
       const data = await res.json();
