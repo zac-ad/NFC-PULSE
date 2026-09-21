@@ -12,30 +12,35 @@
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { randomBytes } from 'crypto';
+import { createHash } from 'crypto';
+import { cookies } from 'next/headers';
 
 const INACTIVITY_MINUTES = 30;
 
 // ── GET — validate and refresh an existing session ─────────────────────────
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const token = searchParams.get('vs');
+  // The viewer credential is an HttpOnly cookie. It is intentionally not
+  // accepted from the URL or request body.
+  const cookieStore = await cookies();
+  const token = cookieStore.get('pulse_viewer_session')?.value;
 
   if (!token || token.length !== 64 || !/^[0-9a-f]{64}$/.test(token)) {
-    return NextResponse.json({ active: false, reason: 'invalid_token' }, { status: 400 });
+    return NextResponse.json({ active: false, reason: 'invalid_session' }, { status: 401 });
   }
+
+  const tokenHash = createHash('sha256').update(token).digest('hex');
 
   // 1. Look up session
   const { data: session, error: lookupError } = await supabaseAdmin
     .from('viewer_sessions')
     .select('id, card_id, expires_at')
-    .eq('token', token)
+    .eq('token_hash', tokenHash)
     .maybeSingle();
 
   if (lookupError) {
     console.error('[viewer-session GET] session lookup failed:', lookupError.message);
-    // Fail open — a DB hiccup should not abruptly expire a valid session
-    return NextResponse.json({ active: true, expires_at: null });
+    // Fail closed: if the session cannot be verified, do not trust it.
+    return NextResponse.json({ active: false, reason: 'verification_failed' }, { status: 503 });
   }
 
   if (!session) {
@@ -43,13 +48,11 @@ export async function GET(request: Request) {
   }
 
   // 2. Check expiry
-  if (new Date(session.expires_at) < new Date()) {
+  if (new Date(session.expires_at) <= new Date()) {
     return NextResponse.json({ active: false, reason: 'expired' });
   }
 
   // 3. Re-check card status — card status always wins over session state.
-  //    If the card became LOCKED or DEACTIVATED while someone was viewing,
-  //    revoke the session immediately.
   const { data: card, error: cardError } = await supabaseAdmin
     .from('hardware_cards')
     .select('status')
@@ -58,17 +61,16 @@ export async function GET(request: Request) {
 
   if (cardError) {
     console.error('[viewer-session GET] card status lookup failed:', cardError.message);
-    // Fail open — cannot confirm card status, do not block the session
-    return NextResponse.json({ active: true, expires_at: session.expires_at });
+    // Fail closed: an unverified card must not keep an active viewer session.
+    return NextResponse.json({ active: false, reason: 'verification_failed' }, { status: 503 });
   }
 
   if (!card || card.status !== 'ACTIVE') {
+    await supabaseAdmin.from('viewer_sessions').delete().eq('id', session.id);
     return NextResponse.json({ active: false, reason: 'card_blocked' });
   }
 
-  // 4. Refresh the timer — reset last_active and push expires_at forward.
-  //    Log if the update fails — a silent failure here means the session
-  //    will not be extended and will expire at the previous expires_at.
+  // 4. Refresh the inactivity timer.
   const now = new Date();
   const newExpiry = new Date(now.getTime() + INACTIVITY_MINUTES * 60 * 1000).toISOString();
 
@@ -79,47 +81,25 @@ export async function GET(request: Request) {
 
   if (updateError) {
     console.error('[viewer-session GET] timer refresh failed:', updateError.message);
-    // Return the old expiry — the session is still valid until it lapses
+    // Do not extend a session we failed to persist. Return its existing expiry.
     return NextResponse.json({ active: true, expires_at: session.expires_at });
   }
+
+  // Keep the browser cookie aligned with the inactivity window.
+  cookieStore.set('pulse_viewer_session', token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: INACTIVITY_MINUTES * 60,
+  });
 
   return NextResponse.json({ active: true, expires_at: newExpiry });
 }
 
-// ── POST — create a new viewer session ─────────────────────────────────────
-// Called server-side from /t/[code] after card status is confirmed ACTIVE.
-// Not called from the browser directly.
-export async function POST(request: Request) {
-  const { card_id } = await request.json();
-
-  if (!card_id) {
-    return NextResponse.json({ error: 'card_id required' }, { status: 400 });
-  }
-
-  // Verify card is still ACTIVE before creating the session
-  const { data: card } = await supabaseAdmin
-    .from('hardware_cards')
-    .select('id, status')
-    .eq('id', card_id)
-    .maybeSingle();
-
-  if (!card || card.status !== 'ACTIVE') {
-    return NextResponse.json({ error: 'Card is not active' }, { status: 409 });
-  }
-
-  const token = randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + INACTIVITY_MINUTES * 60 * 1000).toISOString();
-
-  const { error } = await supabaseAdmin.from('viewer_sessions').insert({
-    token,
-    card_id: card.id,
-    expires_at: expiresAt,
-  });
-
-  if (error) {
-    console.error('[viewer-session POST]', error.message);
-    return NextResponse.json({ error: 'Could not create session' }, { status: 500 });
-  }
-
-  return NextResponse.json({ token, expires_at: expiresAt });
+// ── POST ─────────────────────────────────────────────────────────────────────
+// Session creation is intentionally server-only in /t/[code]. There is no
+// public POST endpoint that accepts a card_id or creates viewer credentials.
+export async function POST() {
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
