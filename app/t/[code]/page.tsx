@@ -92,6 +92,7 @@ export default async function TapRouterPage({ params }: PageProps) {
     const profileSlug = card.profiles?.slug;
     if (!profileSlug) redirect('/card-disabled');
 
+    let viewerToken: string | null = null;
     try {
       const token = randomBytes(32).toString('hex');
       const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -105,26 +106,29 @@ export default async function TapRouterPage({ params }: PageProps) {
 
       if (error) {
         console.error('[tap] viewer session creation failed:', error.message);
-        redirect(`/p/${profileSlug}`);
+      } else {
+        viewerToken = token;
       }
-
-      const cookieStore = await cookies();
-      cookieStore.set('pulse_viewer_session', token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: INACTIVITY_MINUTES * 60,
-      });
-
-      // Non-sensitive marker only: tells the client this navigation came
-      // from a physical tap. The actual session credential stays in the cookie.
-      redirect(`/p/${profileSlug}?session=1`);
     } catch (err) {
       console.error('[tap] viewer session creation failed:', err);
+    }
+
+    if (!viewerToken) {
       redirect(`/p/${profileSlug}`);
     }
-    redirect(destination);
+
+    const cookieStore = await cookies();
+    cookieStore.set('pulse_viewer_session', viewerToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: INACTIVITY_MINUTES * 60,
+    });
+
+    // Non-sensitive marker only: tells the client this navigation came
+    // from a physical tap. The actual session credential stays in the cookie.
+    redirect(`/p/${profileSlug}?session=1`);
   }
 
   redirect('/card-disabled');
