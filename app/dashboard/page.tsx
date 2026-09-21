@@ -17,7 +17,7 @@ interface LinkItem {
   title: string;
   url: string;
   type: 'link' | 'qr';
-  visibility: 'public' | 'tap';
+  visibility?: 'public' | 'tap';
 }
 
 interface TapEvent {
