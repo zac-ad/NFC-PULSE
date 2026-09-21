@@ -30,20 +30,49 @@ export async function POST(request: Request) {
   if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { profile_id, title, url, type, position } = body;
+  const { profile_id, title, url, type, position, visibility } = body;
   if (!profile_id || !title || !url) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
+
+  const normalizedVisibility = visibility === 'tap' ? 'tap' : 'public';
 
   const owns = await verifyProfileOwnership(email, profile_id);
   if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { data, error } = await supabaseAdmin
     .from('profile_links')
-    .insert({ profile_id, title, url, type: type || 'link', position: position || 0 })
+    .insert({ profile_id, title, url, type: type || 'link', position: position || 0, visibility: normalizedVisibility })
     .select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ link: data });
+}
+
+
+// PATCH — change a link's visibility
+export async function PATCH(request: Request) {
+  const email = await getUserEmail(request);
+  if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { linkId, profileId, visibility } = await request.json();
+  if (!linkId || !profileId || !['public', 'tap'].includes(visibility)) {
+    return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 });
+  }
+
+  const owns = await verifyProfileOwnership(email, profileId);
+  if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { data, error } = await supabaseAdmin
+    .from('profile_links')
+    .update({ visibility })
+    .eq('id', linkId)
+    .eq('profile_id', profileId)
+    .select()
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'Link not found or access denied' }, { status: 404 });
   return NextResponse.json({ link: data });
 }
 
