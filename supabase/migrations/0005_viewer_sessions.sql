@@ -31,6 +31,9 @@ CREATE INDEX IF NOT EXISTS viewer_sessions_token_idx
 CREATE INDEX IF NOT EXISTS viewer_sessions_expires_at_idx
   ON public.viewer_sessions (expires_at);
 
+-- Defense in depth: RLS is enabled with no browser-facing policies.
+ALTER TABLE public.viewer_sessions ENABLE ROW LEVEL SECURITY;
+
 -- No browser client should ever read or write this table
 REVOKE ALL ON public.viewer_sessions FROM public;
 REVOKE ALL ON public.viewer_sessions FROM anon;
