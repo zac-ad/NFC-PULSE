@@ -42,22 +42,22 @@ function PulseCard({
     >
       <div className="absolute inset-0 p-5 flex flex-col justify-between rounded-2xl">
         <div className="flex items-center justify-between">
-          <span className={`font-serif text-xs ${isPro ? 'text-white/50' : 'text-black/40'}`}>
+          <span className={`font-serif text-xs ${isBlack ? 'text-white/50' : 'text-black/40'}`}>
             Pulse
           </span>
-          <svg className={`w-3.5 h-3.5 ${isPro ? 'text-white/30' : 'text-black/25'}`}
+          <svg className={`w-3.5 h-3.5 ${isBlack ? 'text-white/30' : 'text-black/25'}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <path d="M2 12h4l2-6 4 12 3-8 2 2h5" />
           </svg>
         </div>
         <div>
-          <p className={`text-[9px] font-mono mb-1 ${isPro ? 'text-white/30' : 'text-black/30'}`}>
+          <p className={`text-[9px] font-mono mb-1 ${isBlack ? 'text-white/30' : 'text-black/30'}`}>
             {isPro ? 'professional' : 'personal'}
           </p>
-          <p className={`font-serif text-sm leading-tight ${isPro ? 'text-white' : 'text-black'}`}>
+          <p className={`font-serif text-sm leading-tight ${isBlack ? 'text-white' : 'text-black'}`}>
             {isPro ? 'Isaac Salasiban' : 'Isaac'}
           </p>
-          {isPro && <p className="text-[11px] mt-0.5 text-white/40">Founder</p>}
+          {isPro && <p className={`text-[11px] mt-0.5 ${isBlack ? 'text-white/40' : 'text-black/40'}`}>Founder</p>}
         </div>
       </div>
     </div>
