@@ -9,7 +9,7 @@
 //   - After 30 min inactivity, shows a PULSE-branded expired overlay
 //   - Overlay never replaces the profile — it sits on top
 //
-// When accessed directly (/p/[slug] with no ?vs param):
+// When accessed directly (/p/[slug] with no session marker):
 //   - Viewer session logic is completely skipped
 //   - Profile works exactly as before
 //
@@ -134,6 +134,7 @@ const renderPlatformIcon = (title: string, url: string) => {
 // Matches the existing dark aesthetic of the profile page.
 function SessionExpiredOverlay({ reason }: { reason: string }) {
   const isBlocked = reason === 'card_blocked';
+  const isVerificationFailed = reason === 'verification_failed';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-6">
       <div className="w-full max-w-xs bg-neutral-950 border border-neutral-800/80 rounded-3xl p-8 text-center space-y-5 shadow-2xl">
@@ -143,12 +144,14 @@ function SessionExpiredOverlay({ reason }: { reason: string }) {
         <div className="space-y-2">
           <p className="font-mono text-[10px] text-neutral-500 tracking-widest uppercase">PULSE</p>
           <h2 className="text-lg font-bold text-white">
-            {isBlocked ? 'Card unavailable.' : 'Session ended.'}
+            {isBlocked ? 'Card unavailable.' : isVerificationFailed ? 'Connection couldn’t be verified.' : 'Session ended.'}
           </h2>
           <p className="text-xs text-neutral-400 leading-relaxed">
             {isBlocked
               ? 'This card is currently inactive.'
-              : 'Tap the card again to reconnect.'}
+              : isVerificationFailed
+                ? 'Tap the card again to reconnect.'
+                : 'Tap the card again to reconnect.'}
           </p>
         </div>
       </div>
@@ -364,7 +367,7 @@ function PublicProfilePageInner() {
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Viewer session state — only relevant when this navigation came from a tap
+  // Viewer session state — only relevant when this navigation came from a physical tap
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionExpireReason, setSessionExpireReason] = useState('expired');
 
@@ -377,7 +380,13 @@ function PublicProfilePageInner() {
     if (!sessionMode || sessionExpired) return;
     try {
       const res = await fetch('/api/viewer-session');
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (res.status === 503) {
+          setSessionExpired(true);
+          setSessionExpireReason('verification_failed');
+        }
+        return;
+      }
       const data = await res.json();
       if (!data.active) {
         setSessionExpired(true);
