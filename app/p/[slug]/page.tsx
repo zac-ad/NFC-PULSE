@@ -361,7 +361,7 @@ function PublicProfilePageInner() {
   const slug = typeof rawSlug === 'string' ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : '';
   // session=1 is only a non-secret navigation marker. The actual viewer
   // credential is an HttpOnly cookie and is never readable by this page.
-  const sessionMode = searchParams.get('session') === '1';
+  const [sessionMode] = useState(() => searchParams.get('session') === '1');
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
@@ -382,9 +382,11 @@ function PublicProfilePageInner() {
       const res = await fetch('/api/viewer-session');
       if (!res.ok) {
         if (res.status === 503) {
-          setSessionExpired(true);
           setSessionExpireReason('verification_failed');
+        } else {
+          setSessionExpireReason('expired');
         }
+        setSessionExpired(true);
         return;
       }
       const data = await res.json();
