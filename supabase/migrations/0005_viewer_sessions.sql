@@ -10,13 +10,13 @@
 -- Security:
 --   Only the service role (Next.js API) reads/writes this table.
 --   anon and authenticated roles are explicitly revoked.
---   token is a 32-byte random hex string (256-bit entropy).
+--   the raw 32-byte token is never stored; only its SHA-256 hash is kept.
 --   card_id FK ensures sessions are always tied to a real card.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.viewer_sessions (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  token       TEXT        NOT NULL UNIQUE,
+  token_hash  TEXT        NOT NULL UNIQUE,
   card_id     UUID        NOT NULL REFERENCES public.hardware_cards(id) ON DELETE CASCADE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_active TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS public.viewer_sessions (
 
 -- Fast token lookup on every profile page load / ping
 CREATE INDEX IF NOT EXISTS viewer_sessions_token_idx
-  ON public.viewer_sessions (token);
+  ON public.viewer_sessions (token_hash);
 
 -- Fast cleanup of expired sessions
 CREATE INDEX IF NOT EXISTS viewer_sessions_expires_at_idx
