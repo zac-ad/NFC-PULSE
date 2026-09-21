@@ -63,23 +63,12 @@ export async function PATCH(request: Request) {
   const owns = await verifyProfileOwnership(email, profileId);
   if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { data: existingLink, error: existingError } = await supabaseAdmin
-    .from('profile_links')
-    .select('id, type')
-    .eq('id', linkId)
-    .eq('profile_id', profileId)
-    .maybeSingle();
-
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
-  if (!existingLink) return NextResponse.json({ error: 'Link not found or access denied' }, { status: 404 });
-
-  const safeVisibility = existingLink.type === 'qr' ? 'tap' : visibility;
-
   const { data, error } = await supabaseAdmin
     .from('profile_links')
-    .update({ visibility: safeVisibility })
+    .update({ visibility })
     .eq('id', linkId)
     .eq('profile_id', profileId)
+    .neq('type', 'qr')
     .select()
     .maybeSingle();
 
