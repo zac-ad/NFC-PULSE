@@ -75,9 +75,10 @@ export default function LandingPage() {
   const s7  = useRef<HTMLElement>(null);
   const s8  = useRef<HTMLElement>(null);
   const s9  = useRef<HTMLElement>(null);
+  const s10 = useRef<HTMLElement>(null);
   useFadeIn(s2); useFadeIn(s3); useFadeIn(s4);
   useFadeIn(s5); useFadeIn(s6); useFadeIn(s7);
-  useFadeIn(s8); useFadeIn(s9);
+  useFadeIn(s8); useFadeIn(s9); useFadeIn(s10);
 
   const handleTap = useCallback(() => {
     if (tapState !== 'idle') {
@@ -110,6 +111,9 @@ export default function LandingPage() {
             PULSE
           </Link>
           <div className="flex items-center gap-6">
+            <Link href="/features" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">
+              Features
+            </Link>
             <Link href="/portal" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">
               Log in
             </Link>
@@ -490,7 +494,35 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── 10 · CTA ─────────────────────────────────────── */}
+        {/* ── 10 · PRIVACY / TRUST ───────────────────────────── */}
+        <section ref={s10} className="fade-section px-6 py-32 border-t border-white/[0.05]">
+          <div className="max-w-5xl mx-auto grid md:grid-cols-[0.85fr_1.15fr] gap-16 items-start">
+            <div>
+              <p className="text-[11px] font-mono tracking-[0.2em] text-white/25 mb-5">A QUIET PROMISE</p>
+              <h2 className="font-serif text-[clamp(32px,5vw,58px)] leading-[1.05] text-white">
+                Share what matters.
+                <br />
+                <span className="text-white/35">Keep what is personal.</span>
+              </h2>
+            </div>
+            <div className="space-y-6 text-[15px] leading-relaxed text-white/40">
+              <p>
+                PULSE is built around choice. Your public profile can stay simple, while selected contact and payment details can be available only after a PULSE connection.
+              </p>
+              <p>
+                We show people what you choose to share. We do not need to expose how the system works to make the experience work for you.
+              </p>
+              <div className="pt-5 border-t border-white/[0.06]">
+                <p className="text-white/60 text-[14px]">Your card is the introduction. Your profile is yours to control.</p>
+                <Link href="/privacy" className="inline-block mt-4 text-[13px] text-white/35 hover:text-white/70 border-b border-white/10 hover:border-white/30 pb-1 transition-colors">
+                  Read our privacy policy →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 11 · CTA ─────────────────────────────────────── */}
         <section className="px-6 py-32 border-t border-white/[0.05]">
           <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
             <div>
