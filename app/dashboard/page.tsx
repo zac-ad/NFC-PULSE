@@ -108,6 +108,7 @@ function DashboardContent() {
   const [items, setItems]         = useState<LinkItem[]>([]);
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl]     = useState('');
+  const [linkVisibility, setLinkVisibility] = useState<'public' | 'tap'>('public');
   const [qrTitle, setQrTitle]     = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
 
