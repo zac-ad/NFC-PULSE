@@ -26,11 +26,17 @@ export async function GET(request: Request) {
   }
 
   // 1. Look up session
-  const { data: session } = await supabaseAdmin
+  const { data: session, error: lookupError } = await supabaseAdmin
     .from('viewer_sessions')
     .select('id, card_id, expires_at')
     .eq('token', token)
     .maybeSingle();
+
+  if (lookupError) {
+    console.error('[viewer-session GET] session lookup failed:', lookupError.message);
+    // Fail open — a DB hiccup should not abruptly expire a valid session
+    return NextResponse.json({ active: true, expires_at: null });
+  }
 
   if (!session) {
     return NextResponse.json({ active: false, reason: 'not_found' });
@@ -43,25 +49,39 @@ export async function GET(request: Request) {
 
   // 3. Re-check card status — card status always wins over session state.
   //    If the card became LOCKED or DEACTIVATED while someone was viewing,
-  //    kill the session immediately.
-  const { data: card } = await supabaseAdmin
+  //    revoke the session immediately.
+  const { data: card, error: cardError } = await supabaseAdmin
     .from('hardware_cards')
     .select('status')
     .eq('id', session.card_id)
     .maybeSingle();
 
+  if (cardError) {
+    console.error('[viewer-session GET] card status lookup failed:', cardError.message);
+    // Fail open — cannot confirm card status, do not block the session
+    return NextResponse.json({ active: true, expires_at: session.expires_at });
+  }
+
   if (!card || card.status !== 'ACTIVE') {
     return NextResponse.json({ active: false, reason: 'card_blocked' });
   }
 
-  // 4. Refresh the timer — reset last_active and push expires_at forward
+  // 4. Refresh the timer — reset last_active and push expires_at forward.
+  //    Log if the update fails — a silent failure here means the session
+  //    will not be extended and will expire at the previous expires_at.
   const now = new Date();
   const newExpiry = new Date(now.getTime() + INACTIVITY_MINUTES * 60 * 1000).toISOString();
 
-  await supabaseAdmin
+  const { error: updateError } = await supabaseAdmin
     .from('viewer_sessions')
     .update({ last_active: now.toISOString(), expires_at: newExpiry })
     .eq('id', session.id);
+
+  if (updateError) {
+    console.error('[viewer-session GET] timer refresh failed:', updateError.message);
+    // Return the old expiry — the session is still valid until it lapses
+    return NextResponse.json({ active: true, expires_at: session.expires_at });
+  }
 
   return NextResponse.json({ active: true, expires_at: newExpiry });
 }
