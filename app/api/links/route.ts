@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
 
-  const normalizedVisibility = visibility === 'tap' ? 'tap' : 'public';
+  const normalizedVisibility = type === 'qr' ? 'tap' : (visibility === 'tap' ? 'tap' : 'public');
 
   const owns = await verifyProfileOwnership(email, profile_id);
   if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
