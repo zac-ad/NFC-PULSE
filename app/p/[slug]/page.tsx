@@ -2,14 +2,14 @@
 //
 // Live public profile page.
 //
-// When accessed via NFC tap (/t/[code] → /p/[slug]?vs=<token>):
+// When accessed via NFC tap (/t/[code] → /p/[slug]?session=1):
 //   - Validates the viewer session token
 //   - Pings /api/viewer-session every 5 minutes to refresh the 30-min timer
 //   - Activity (clicks, scrolls) also triggers a refresh (debounced 1/min)
 //   - After 30 min inactivity, shows a PULSE-branded expired overlay
 //   - Overlay never replaces the profile — it sits on top
 //
-// When accessed directly (/p/[slug] with no ?vs param):
+// When accessed directly (/p/[slug] with no session marker):
 //   - Viewer session logic is completely skipped
 //   - Profile works exactly as before
 //
@@ -18,7 +18,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 interface LinkItem {
@@ -134,6 +134,7 @@ const renderPlatformIcon = (title: string, url: string) => {
 // Matches the existing dark aesthetic of the profile page.
 function SessionExpiredOverlay({ reason }: { reason: string }) {
   const isBlocked = reason === 'card_blocked';
+  const isVerificationFailed = reason === 'verification_failed';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-6">
       <div className="w-full max-w-xs bg-neutral-950 border border-neutral-800/80 rounded-3xl p-8 text-center space-y-5 shadow-2xl">
@@ -143,12 +144,14 @@ function SessionExpiredOverlay({ reason }: { reason: string }) {
         <div className="space-y-2">
           <p className="font-mono text-[10px] text-neutral-500 tracking-widest uppercase">PULSE</p>
           <h2 className="text-lg font-bold text-white">
-            {isBlocked ? 'Card unavailable.' : 'Session ended.'}
+            {isBlocked ? 'Card unavailable.' : isVerificationFailed ? 'Connection couldn’t be verified.' : 'Session ended.'}
           </h2>
           <p className="text-xs text-neutral-400 leading-relaxed">
             {isBlocked
               ? 'This card is currently inactive.'
-              : 'Tap the card again to reconnect.'}
+              : isVerificationFailed
+                ? 'Tap the card again to reconnect.'
+                : 'Tap the card again to reconnect.'}
           </p>
         </div>
       </div>
@@ -353,15 +356,18 @@ function ProfileContent({ profile, links }: { profile: ProfileData; links: LinkI
 function PublicProfilePageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const rawSlug = params?.slug;
   const slug = typeof rawSlug === 'string' ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : '';
-  const vsToken = searchParams.get('vs') || null;
+  // session=1 is only a non-secret navigation marker. The actual viewer
+  // credential is an HttpOnly cookie and is never readable by this page.
+  const [sessionMode] = useState(() => searchParams.get('session') === '1');
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Viewer session state — only relevant when vsToken is present
+  // Viewer session state — only relevant when this navigation came from a physical tap
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionExpireReason, setSessionExpireReason] = useState('expired');
 
@@ -371,10 +377,18 @@ function PublicProfilePageInner() {
 
   // ── Session ping ───────────────────────────────────────────────────────────
   const pingSession = useCallback(async () => {
-    if (!vsToken || sessionExpired) return;
+    if (!sessionMode || sessionExpired) return;
     try {
-      const res = await fetch(`/api/viewer-session?vs=${vsToken}`);
-      if (!res.ok) return;
+      const res = await fetch('/api/viewer-session');
+      if (!res.ok) {
+        if (res.status === 503) {
+          setSessionExpireReason('verification_failed');
+        } else {
+          setSessionExpireReason('expired');
+        }
+        setSessionExpired(true);
+        return;
+      }
       const data = await res.json();
       if (!data.active) {
         setSessionExpired(true);
@@ -383,17 +397,17 @@ function PublicProfilePageInner() {
     } catch {
       // Network failure — don't expire the session, try again next interval
     }
-  }, [vsToken, sessionExpired]);
+  }, [sessionMode, sessionExpired]);
 
   // Activity handler — debounced to max once per minute
   const handleActivity = useCallback(() => {
-    if (!vsToken || sessionExpired) return;
+    if (!sessionMode || sessionExpired) return;
     const now = Date.now();
     if (now - lastPingRef.current > 60_000) {
       lastPingRef.current = now;
       pingSession();
     }
-  }, [vsToken, sessionExpired, pingSession]);
+  }, [sessionMode, sessionExpired, pingSession]);
 
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -423,7 +437,11 @@ function PublicProfilePageInner() {
 
   // Viewer session: validate on mount, then ping every 5 minutes
   useEffect(() => {
-    if (!vsToken) return;
+    if (!sessionMode) return;
+
+    // Remove the non-secret marker from the visible/shareable URL. The
+    // HttpOnly session cookie remains available to the API.
+    router.replace(`/p/${slug}`);
 
     // Initial validation
     pingSession();
@@ -442,7 +460,7 @@ function PublicProfilePageInner() {
       window.removeEventListener('scroll', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
     };
-  }, [vsToken, pingSession, handleActivity]);
+  }, [sessionMode, pingSession, handleActivity, router, slug]);
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {

@@ -1,26 +1,22 @@
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
-import { redirect } from 'next/navigation';
+import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const INACTIVITY_MINUTES = 30;
 
-interface PageProps {
-  params: Promise<{ code: string }>;
-}
-
-export default async function TapRouterPage({ params }: PageProps) {
+export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
   const h = await headers();
   const resolvedParams = await params;
   const cardCode = resolvedParams.code?.trim().toUpperCase();
 
-  if (!cardCode) redirect('/card-disabled');
+  if (!cardCode) return NextResponse.redirect(new URL('/card-disabled', request.url));
 
   // Rate limit: 20 taps per IP per minute.
   // Redirects to /card-disabled rather than a distinct "rate limited" page
@@ -28,7 +24,7 @@ export default async function TapRouterPage({ params }: PageProps) {
   // "you're being rate limited."
   const ip = h.get('x-forwarded-for') || 'unknown';
   const allowed = await checkRateLimit(`tap:${ip}`, 20, 60);
-  if (!allowed) redirect('/card-disabled');
+  if (!allowed) return NextResponse.redirect(new URL('/card-disabled', request.url));
 
   const { data: card } = await supabase
     .from('hardware_cards')
@@ -36,9 +32,9 @@ export default async function TapRouterPage({ params }: PageProps) {
     .eq('card_code', cardCode)
     .single();
 
-  if (!card || card.status === 'UNCLAIMED') redirect(`/activate?code=${cardCode}`);
-  if (card.status === 'DEACTIVATED') redirect('/card-disabled');
-  if (card.status === 'LOCKED') redirect('/card-disabled');
+  if (!card || card.status === 'UNCLAIMED') return NextResponse.redirect(new URL(`/activate?code=${cardCode}`, request.url));
+  if (card.status === 'DEACTIVATED') return NextResponse.redirect(new URL('/card-disabled', request.url));
+  if (card.status === 'LOCKED') return NextResponse.redirect(new URL('/card-disabled', request.url));
 
   if (card.status === 'ACTIVE' && card.profile_id) {
 
@@ -65,7 +61,7 @@ export default async function TapRouterPage({ params }: PageProps) {
       console.error('Owner check failed, falling back to normal tap flow:', err);
     }
 
-    if (isOwner) redirect('/dashboard');
+    if (isOwner) return NextResponse.redirect(new URL('/dashboard', request.url));
 
     // ── Tap analytics ────────────────────────────────────────────────────────
     const city    = decodeURIComponent(h.get('x-vercel-ip-city')    || 'Unknown');
@@ -87,40 +83,46 @@ export default async function TapRouterPage({ params }: PageProps) {
     await supabase.rpc('increment_tap_count', { card_id: card.id });
 
     // ── Viewer session ───────────────────────────────────────────────────────
-    // Create a short-lived viewer session so the profile page can track
-    // 30 minutes of inactivity. This is a privacy/UX layer — it does NOT
-    // affect permanent accessibility of /p/[slug]. Visitors with the
-    // direct URL always see the profile. The session only gates repeat
-    // access after the tap interaction goes idle.
-    //
-    // If session creation fails for any reason, we still redirect to the
-    // profile without a token — the profile works normally without it.
+    // Create a short-lived viewer session server-side. The bearer token is
+    // stored only in an HttpOnly cookie; it is never placed in the URL.
     const profileSlug = card.profiles?.slug;
-    if (!profileSlug) redirect('/card-disabled');
+    if (!profileSlug) return NextResponse.redirect(new URL('/card-disabled', request.url));
 
     let viewerToken: string | null = null;
     try {
       const token = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
       const expiresAt = new Date(Date.now() + INACTIVITY_MINUTES * 60 * 1000).toISOString();
 
       const { error } = await supabaseAdmin.from('viewer_sessions').insert({
-        token,
-        card_id:    card.id,
+        token_hash: tokenHash,
+        card_id: card.id,
         expires_at: expiresAt,
       });
 
-      if (!error) viewerToken = token;
+      if (error) {
+        console.error('[tap] viewer session creation failed:', error.message);
+      } else {
+        viewerToken = token;
+      }
     } catch (err) {
-      // Session creation is best-effort — never block the tap flow
-      console.error('Viewer session creation failed (non-fatal):', err);
+      console.error('[tap] viewer session creation failed:', err);
     }
 
-    const destination = viewerToken
-      ? `/p/${profileSlug}?vs=${viewerToken}`
-      : `/p/${profileSlug}`;
+    if (!viewerToken) return NextResponse.redirect(new URL(`/p/${profileSlug}`, request.url));
 
-    redirect(destination);
+    // Set the bearer credential only on the redirect response. This route is a
+    // Route Handler so the HttpOnly cookie is set in a supported response boundary.
+    const response = NextResponse.redirect(new URL(`/p/${profileSlug}?session=1`, request.url));
+    response.cookies.set('__Host-pulse_viewer_session', viewerToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: INACTIVITY_MINUTES * 60,
+    });
+    return response;
   }
 
-  redirect('/card-disabled');
+  return NextResponse.redirect(new URL('/card-disabled', request.url));
 }
