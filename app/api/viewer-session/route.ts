@@ -2,8 +2,8 @@
 //
 // Viewer session management for NFC tap interactions.
 //
-// GET  ?vs=<token>  — validate session, re-check card status, refresh timer
-// POST              — create a new viewer session (called by /t/[code])
+// GET  — validate the HttpOnly viewer session cookie, re-check card status, refresh timer
+// POST — intentionally disabled; sessions are created only inside /t/[code]
 //
 // Security hierarchy:
 //   Card status is the primary gate. If card becomes LOCKED or DEACTIVATED
