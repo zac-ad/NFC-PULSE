@@ -9,3 +9,9 @@ ALTER TABLE public.profile_links
 ALTER TABLE public.profile_links
   ADD CONSTRAINT profile_links_visibility_check
   CHECK (visibility IN ('public', 'tap'));
+
+-- Payment QR codes remain private by default because they are intended to be
+-- available through a physical PULSE connection, not a public profile URL.
+UPDATE public.profile_links
+SET visibility = 'tap'
+WHERE type = 'qr';
