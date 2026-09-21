@@ -29,18 +29,28 @@ function PulseCard({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const dims = { sm: 'w-36', md: 'w-64', lg: 'w-80' };
+  const dims = { sm: 'w-36', md: 'w-64', lg: 'w-[400px] max-w-[85vw]' };
   const isPro = mode === 'pro';
   const isBlack = color === 'black';
   return (
     <div
-      className={`${dims[size]} aspect-[1.586/1] rounded-2xl relative transition-all duration-700 ${
+      className={`${dims[size]} aspect-[1.586/1] rounded-[22px] relative overflow-hidden transition-all duration-500 ${
         isBlack
-          ? 'bg-[#141414] border border-white/10 shadow-[0_30px_70px_-30px_rgba(0,0,0,0.9)]'
-          : 'bg-[#f2f0eb] border border-black/10 shadow-[0_30px_70px_-30px_rgba(0,0,0,0.45)]'
+          ? 'border border-white/[0.11] shadow-[0_34px_80px_-34px_rgba(0,0,0,0.95)]'
+          : 'border border-black/[0.12] shadow-[0_34px_80px_-34px_rgba(0,0,0,0.5)]'
       } ${className}`}
     >
-      <div className="absolute inset-0 p-5 flex flex-col justify-between rounded-2xl">
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-[22px]" style={{
+        background: isBlack
+          ? "radial-gradient(circle at 18% 12%, rgba(255,255,255,0.075), transparent 28%), linear-gradient(135deg, #191919 0%, #101010 48%, #080808 100%)"
+          : "radial-gradient(circle at 18% 12%, rgba(255,255,255,0.95), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f1f0ed 52%, #deddd9 100%)"
+      }} />
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-[22px]" style={{
+        background: isBlack
+          ? "linear-gradient(115deg, rgba(255,255,255,0.035), transparent 34%, rgba(0,0,0,0.18) 100%)"
+          : "linear-gradient(115deg, rgba(255,255,255,0.35), transparent 34%, rgba(0,0,0,0.035) 100%)"
+      }} />
+      <div className="absolute inset-0 p-5 flex flex-col justify-between rounded-[22px]">
         <div className="flex items-center justify-between">
           <span className={`font-serif text-xs ${isBlack ? 'text-white/50' : 'text-black/40'}`}>
             Pulse
@@ -448,19 +458,9 @@ export default function LandingPage() {
             {/* One physical card, two finishes — the buyer chooses. */}
             <div className="flex flex-col items-center">
               <div
-                className="relative flex justify-center items-center min-h-[260px] cursor-pointer select-none"
-                onClick={() => setCardColor(cardColor === 'black' ? 'white' : 'black')}
-                role="button"
-                tabIndex={0}
-                aria-label={cardColor === 'black' ? 'Switch to white PULSE card' : 'Switch to black PULSE card'}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setCardColor(cardColor === 'black' ? 'white' : 'black');
-                  }
-                }}
+                className="relative flex justify-center items-center min-h-[300px]"
               >
-                <div className="relative transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-2">
+                <div className="relative transition-transform duration-500 ease-out hover:-translate-y-1">
                   <PulseCard mode="pro" color={cardColor} size="lg" />
                 </div>
               </div>
