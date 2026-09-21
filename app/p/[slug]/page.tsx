@@ -10,8 +10,8 @@
 //   - Overlay never replaces the profile — it sits on top
 //
 // When accessed directly (/p/[slug] with no session marker):
-//   - Viewer session logic is completely skipped
-//   - Profile works exactly as before
+//   - The public profile layer is shown
+//   - Private contact/payment actions are not sent to the browser
 //
 // The live profile layout is NOT changed.
 
@@ -159,7 +159,8 @@ function SessionExpiredOverlay({ reason }: { reason: string }) {
 }
 
 // ── Profile content ──────────────────────────────────────────────────────────
-// Identical to the original — zero layout changes.
+// The existing profile layout is preserved. Connection state only controls
+// which already-existing private actions/data are available.
 function ProfileContent({ profile, links, connected }: { profile: ProfileData; links: LinkItem[]; connected: boolean }) {
   const [openQrId, setOpenQrId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
