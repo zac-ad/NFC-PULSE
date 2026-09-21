@@ -18,14 +18,16 @@ import { cookies } from 'next/headers';
 const INACTIVITY_MINUTES = 30;
 
 // ── GET — validate and refresh an existing session ─────────────────────────
-export async function GET(request: Request) {
+export async function GET() {
   // The viewer credential is an HttpOnly cookie. It is intentionally not
   // accepted from the URL or request body.
   const cookieStore = await cookies();
-  const token = cookieStore.get('pulse_viewer_session')?.value;
+  const token = cookieStore.get('__Host-pulse_viewer_session')?.value;
 
   if (!token || token.length !== 64 || !/^[0-9a-f]{64}$/.test(token)) {
-    return NextResponse.json({ active: false, reason: 'invalid_session' }, { status: 401 });
+    const response = NextResponse.json({ active: false, reason: 'invalid_session' }, { status: 401 });
+    response.cookies.delete('__Host-pulse_viewer_session');
+    return response;
   }
 
   const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -44,12 +46,17 @@ export async function GET(request: Request) {
   }
 
   if (!session) {
-    return NextResponse.json({ active: false, reason: 'not_found' });
+    const response = NextResponse.json({ active: false, reason: 'not_found' });
+    response.cookies.delete('__Host-pulse_viewer_session');
+    return response;
   }
 
   // 2. Check expiry
   if (new Date(session.expires_at) <= new Date()) {
-    return NextResponse.json({ active: false, reason: 'expired' });
+    await supabaseAdmin.from('viewer_sessions').delete().eq('id', session.id);
+    const response = NextResponse.json({ active: false, reason: 'expired' });
+    response.cookies.delete('__Host-pulse_viewer_session');
+    return response;
   }
 
   // 3. Re-check card status — card status always wins over session state.
@@ -67,7 +74,9 @@ export async function GET(request: Request) {
 
   if (!card || card.status !== 'ACTIVE') {
     await supabaseAdmin.from('viewer_sessions').delete().eq('id', session.id);
-    return NextResponse.json({ active: false, reason: 'card_blocked' });
+    const response = NextResponse.json({ active: false, reason: 'card_blocked' });
+    response.cookies.delete('__Host-pulse_viewer_session');
+    return response;
   }
 
   // 4. Refresh the inactivity timer.
@@ -86,7 +95,7 @@ export async function GET(request: Request) {
   }
 
   // Keep the browser cookie aligned with the inactivity window.
-  cookieStore.set('pulse_viewer_session', token, {
+  cookieStore.set('__Host-pulse_viewer_session', token, {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
