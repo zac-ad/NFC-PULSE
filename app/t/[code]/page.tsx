@@ -2,9 +2,9 @@ import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -87,38 +87,43 @@ export default async function TapRouterPage({ params }: PageProps) {
     await supabase.rpc('increment_tap_count', { card_id: card.id });
 
     // ── Viewer session ───────────────────────────────────────────────────────
-    // Create a short-lived viewer session so the profile page can track
-    // 30 minutes of inactivity. This is a privacy/UX layer — it does NOT
-    // affect permanent accessibility of /p/[slug]. Visitors with the
-    // direct URL always see the profile. The session only gates repeat
-    // access after the tap interaction goes idle.
-    //
-    // If session creation fails for any reason, we still redirect to the
-    // profile without a token — the profile works normally without it.
+    // Create a short-lived viewer session server-side. The bearer token is
+    // stored only in an HttpOnly cookie; it is never placed in the URL.
     const profileSlug = card.profiles?.slug;
     if (!profileSlug) redirect('/card-disabled');
 
-    let viewerToken: string | null = null;
     try {
       const token = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
       const expiresAt = new Date(Date.now() + INACTIVITY_MINUTES * 60 * 1000).toISOString();
 
       const { error } = await supabaseAdmin.from('viewer_sessions').insert({
-        token,
-        card_id:    card.id,
+        token_hash: tokenHash,
+        card_id: card.id,
         expires_at: expiresAt,
       });
 
-      if (!error) viewerToken = token;
+      if (error) {
+        console.error('[tap] viewer session creation failed:', error.message);
+        redirect(`/p/${profileSlug}`);
+      }
+
+      const cookieStore = await cookies();
+      cookieStore.set('pulse_viewer_session', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: INACTIVITY_MINUTES * 60,
+      });
+
+      // Non-sensitive marker only: tells the client this navigation came
+      // from a physical tap. The actual session credential stays in the cookie.
+      redirect(`/p/${profileSlug}?session=1`);
     } catch (err) {
-      // Session creation is best-effort — never block the tap flow
-      console.error('Viewer session creation failed (non-fatal):', err);
+      console.error('[tap] viewer session creation failed:', err);
+      redirect(`/p/${profileSlug}`);
     }
-
-    const destination = viewerToken
-      ? `/p/${profileSlug}?vs=${viewerToken}`
-      : `/p/${profileSlug}`;
-
     redirect(destination);
   }
 
