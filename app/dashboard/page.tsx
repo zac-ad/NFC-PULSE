@@ -17,6 +17,7 @@ interface LinkItem {
   title: string;
   url: string;
   type: 'link' | 'qr';
+  visibility?: 'public' | 'tap';
 }
 
 interface TapEvent {
@@ -291,12 +292,13 @@ function DashboardContent() {
       url: linkUrl,
       type: 'link',
       position: items.length + 1,
+      visibility: linkVisibility,
     });
     if (result.error) {
       setMessage({ type: 'error', text: `Failed to add link: ${result.error}` });
     } else if (result.link) {
       setItems(prev => [...prev, result.link]);
-      setLinkTitle(''); setLinkUrl('');
+      setLinkTitle(''); setLinkUrl(''); setLinkVisibility('public');
       setMessage({ type: 'success', text: 'Link added.' });
     }
   };
@@ -318,6 +320,23 @@ function DashboardContent() {
       setItems(prev => [...prev, result.link]);
       setQrTitle(''); setQrImageUrl('');
       setMessage({ type: 'success', text: 'QR code added.' });
+    }
+  };
+
+  const handleToggleLinkVisibility = async (id: string | undefined, visibility: 'public' | 'tap') => {
+    if (!id || !currentProfileId) return;
+    const result = await apiCall('/api/links', 'PATCH', {
+      linkId: id,
+      profileId: currentProfileId,
+      visibility,
+    });
+    if (result.error) {
+      setMessage({ type: 'error', text: `Failed to update link: ${result.error}` });
+      return;
+    }
+    if (result.link) {
+      setItems(prev => prev.map(item => item.id === id ? result.link : item));
+      setMessage({ type: 'success', text: visibility === 'tap' ? 'Link set to Tap only.' : 'Link is now public.' });
     }
   };
 
@@ -533,7 +552,7 @@ function DashboardContent() {
 
             {/* Social links */}
             <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 space-y-4">
-              <h2 className="font-serif text-lg text-white">Social links</h2>
+              <div><h2 className="font-serif text-lg text-white">Social links</h2><p className="text-[12px] text-white/30 mt-1">Choose whether each link is visible to anyone or only after a PULSE tap.</p></div>
               <form onSubmit={handleAddLink} className="flex flex-col sm:flex-row gap-3">
                 <input
                   placeholder="Title (e.g. LinkedIn)"
@@ -545,6 +564,15 @@ function DashboardContent() {
                   value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
                   className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                 />
+                <select
+                  value={linkVisibility}
+                  onChange={e => setLinkVisibility(e.target.value as 'public' | 'tap')}
+                  aria-label="Link visibility"
+                  className="bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-3 py-2.5 text-[12px] text-white focus:outline-none focus:border-white/20"
+                >
+                  <option value="public">Public</option>
+                  <option value="tap">Tap only</option>
+                </select>
                 <button type="submit"
                   className="px-5 py-2.5 rounded-xl bg-white text-black text-[13px] font-medium hover:bg-[#f2f0eb] transition-colors whitespace-nowrap">
                   Add
@@ -558,11 +586,22 @@ function DashboardContent() {
                       <p className="text-[13px] text-white">{item.title}</p>
                       <p className="text-[11px] text-white/30 truncate max-w-xs">{item.url}</p>
                     </div>
-                    <button onClick={() => handleDeleteItem(item.id)}
-                      aria-label={`Remove link: ${item.title}`}
-                      className="text-[12px] text-white/25 hover:text-red-400 transition-colors pl-4">
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-3 pl-4">
+                      <select
+                        value={item.visibility || 'public'}
+                        onChange={e => handleToggleLinkVisibility(item.id, e.target.value as 'public' | 'tap')}
+                        aria-label={`${item.title} visibility`}
+                        className="bg-[#222] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[11px] text-white/70 focus:outline-none"
+                      >
+                        <option value="public">Public</option>
+                        <option value="tap">Tap only</option>
+                      </select>
+                      <button onClick={() => handleDeleteItem(item.id)}
+                        aria-label={`Remove link: ${item.title}`}
+                        className="text-[12px] text-white/25 hover:text-red-400 transition-colors">
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 )) : (
                   <p className="text-[12px] text-white/20 text-center py-3">No links yet.</p>
