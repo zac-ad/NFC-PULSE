@@ -144,7 +144,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       phone: profile.phone || '',
       email: profile.email || '',
     },
-    links: privateLinks || [],
+    links: [...(publicLinks || []), ...(privateLinks || [])],
     connected: true,
   });
 }
