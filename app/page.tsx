@@ -288,7 +288,7 @@ export default function LandingPage() {
               <h2 className="font-serif text-[clamp(28px,4vw,52px)] leading-[1.08] text-white">
                 One PULSE.<br />Two experiences.
               </h2>
-              <p className="mt-4 text-[15px] text-white/40">Choose the identity you share. Choose the card you carry.</p>
+              <p className="mt-4 text-[15px] text-white/40">Choose the identity you share. Choose the finish you carry.</p>
             </div>
 
             {/* Identity toggle */}
