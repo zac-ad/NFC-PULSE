@@ -26,8 +26,8 @@ const features = [
   },
   {
     number: '02',
-    title: 'One card. More than one you.',
-    text: 'Use PULSE for your professional identity, your personal identity, or both.',
+    title: 'One PULSE. More than one you.',
+    text: 'Use PULSE for your professional identity, your personal identity, or both. Choose a black or white finish independently.',
   },
   {
     number: '03',
