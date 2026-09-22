@@ -20,41 +20,54 @@ function useFadeIn(ref: React.RefObject<HTMLElement | null>) {
 // ── Card object — the recurring hero ─────────────────────────
 function PulseCard({
   mode = 'pro',
+  color = 'black',
   size = 'md',
   className = '',
 }: {
   mode?: 'pro' | 'personal';
+  color?: 'black' | 'white';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const dims = { sm: 'w-36', md: 'w-64', lg: 'w-80' };
+  const dims = { sm: 'w-36', md: 'w-64', lg: 'w-[400px] max-w-[85vw]' };
   const isPro = mode === 'pro';
+  const isBlack = color === 'black';
   return (
     <div
-      className={`${dims[size]} aspect-[1.586/1] rounded-2xl relative transition-all duration-700 ${
-        isPro
-          ? 'bg-[#141414] border border-white/10'
-          : 'bg-[#f2f0eb] border border-black/10'
+      className={`${dims[size]} aspect-[1.586/1] rounded-[22px] relative overflow-hidden transition-all duration-500 ${
+        isBlack
+          ? 'border border-white/[0.11] shadow-[0_34px_80px_-34px_rgba(0,0,0,0.95)]'
+          : 'border border-black/[0.12] shadow-[0_34px_80px_-34px_rgba(0,0,0,0.5)]'
       } ${className}`}
     >
-      <div className="absolute inset-0 p-5 flex flex-col justify-between rounded-2xl">
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-[22px]" style={{
+        background: isBlack
+          ? "radial-gradient(circle at 18% 12%, rgba(255,255,255,0.075), transparent 28%), linear-gradient(135deg, #191919 0%, #101010 48%, #080808 100%)"
+          : "radial-gradient(circle at 18% 12%, rgba(255,255,255,0.95), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f1f0ed 52%, #deddd9 100%)"
+      }} />
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-[22px]" style={{
+        background: isBlack
+          ? "linear-gradient(115deg, rgba(255,255,255,0.035), transparent 34%, rgba(0,0,0,0.18) 100%)"
+          : "linear-gradient(115deg, rgba(255,255,255,0.35), transparent 34%, rgba(0,0,0,0.035) 100%)"
+      }} />
+      <div className="absolute inset-0 p-5 flex flex-col justify-between rounded-[22px]">
         <div className="flex items-center justify-between">
-          <span className={`font-serif text-xs ${isPro ? 'text-white/50' : 'text-black/40'}`}>
+          <span className={`font-serif text-xs ${isBlack ? 'text-white/50' : 'text-black/40'}`}>
             Pulse
           </span>
-          <svg className={`w-3.5 h-3.5 ${isPro ? 'text-white/30' : 'text-black/25'}`}
+          <svg className={`w-3.5 h-3.5 ${isBlack ? 'text-white/30' : 'text-black/25'}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <path d="M2 12h4l2-6 4 12 3-8 2 2h5" />
           </svg>
         </div>
         <div>
-          <p className={`text-[9px] font-mono mb-1 ${isPro ? 'text-white/30' : 'text-black/30'}`}>
+          <p className={`text-[9px] font-mono mb-1 ${isBlack ? 'text-white/30' : 'text-black/30'}`}>
             {isPro ? 'professional' : 'personal'}
           </p>
-          <p className={`font-serif text-sm leading-tight ${isPro ? 'text-white' : 'text-black'}`}>
+          <p className={`font-serif text-sm leading-tight ${isBlack ? 'text-white' : 'text-black'}`}>
             {isPro ? 'Isaac Salasiban' : 'Isaac'}
           </p>
-          {isPro && <p className="text-[11px] mt-0.5 text-white/40">Founder</p>}
+          {isPro && <p className={`text-[11px] mt-0.5 ${isBlack ? 'text-white/40' : 'text-black/40'}`}>Founder</p>}
         </div>
       </div>
     </div>
@@ -65,6 +78,7 @@ function PulseCard({
 export default function LandingPage() {
   const [tapState, setTapState] = useState<'idle' | 'approaching' | 'connected'>('idle');
   const [identity, setIdentity] = useState<'pro' | 'personal'>('pro');
+  const [cardColor, setCardColor] = useState<'black' | 'white'>('black');
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const s2  = useRef<HTMLElement>(null);
@@ -190,7 +204,7 @@ export default function LandingPage() {
                     tapState === 'connected'   ? 'translate-x-3 md:translate-x-6' : ''
                   }`}
                 >
-                  <PulseCard mode={identity} size="md" />
+                  <PulseCard mode={identity} color={cardColor} size="md" />
                 </div>
                 <p className="text-[11px] font-mono text-white/25">
                   {tapState === 'idle' ? 'tap the card' : tapState === 'approaching' ? 'approaching...' : 'connected'}
@@ -274,7 +288,7 @@ export default function LandingPage() {
               <h2 className="font-serif text-[clamp(28px,4vw,52px)] leading-[1.08] text-white">
                 One PULSE.<br />Two experiences.
               </h2>
-              <p className="mt-4 text-[15px] text-white/40">The product adapts to which version of you shows up.</p>
+              <p className="mt-4 text-[15px] text-white/40">Choose the identity you share. Choose the finish you carry.</p>
             </div>
 
             {/* Identity toggle */}
@@ -314,7 +328,7 @@ export default function LandingPage() {
                         <p className="text-[13px] text-white/40 mt-1">Founder</p>
                       )}
                     </div>
-                    <PulseCard mode={identity} size="sm" />
+                    <PulseCard mode={identity} color={cardColor} size="sm" />
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -432,44 +446,54 @@ export default function LandingPage() {
         {/* ── 08 · THE CARD ─────────────────────────────────── */}
         <section id="card" ref={s8} className="fade-section px-6 py-32 border-t border-white/[0.05]">
           <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-20">
+            <div className="text-center mb-16">
               <h2 className="font-serif text-[clamp(32px,5vw,64px)] leading-[1.05] text-white">
                 Made to be carried.
               </h2>
+              <p className="mt-4 text-[15px] text-white/35">
+                Choose the card. PULSE stays the same.
+              </p>
             </div>
 
-            {/* Card — large, nothing competing */}
-            <div className="flex justify-center mb-20">
+            {/* One physical card, two finishes — the buyer chooses. */}
+            <div className="flex flex-col items-center">
               <div
-                className="relative rounded-3xl bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border border-white/[0.08]"
-                style={{
-                  width: 'min(400px, 85vw)',
-                  aspectRatio: '1.586',
-                  boxShadow: '0 60px 120px -30px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)',
-                }}
+                className="relative flex justify-center items-center min-h-[300px]"
               >
-                <div className="absolute inset-0 p-8 flex flex-col justify-between rounded-3xl">
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif text-base text-white/50">Pulse</span>
-                    <svg className="w-5 h-5 text-white/25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M2 12h4l2-6 4 12 3-8 2 2h5" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-mono text-white/20 tracking-widest mb-1">NFC · BATTERYLESS</p>
-                    <p className="font-mono text-[11px] text-white/30 tracking-widest">CARD-9002</p>
-                  </div>
+                <div className="relative transition-transform duration-500 ease-out hover:-translate-y-1">
+                  <PulseCard mode="pro" color={cardColor} size="lg" />
                 </div>
               </div>
+
+              <div className="mt-8 inline-flex rounded-full bg-white/[0.04] border border-white/[0.08] p-1">
+                {(['black', 'white'] as const).map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setCardColor(color)}
+                    className={`px-7 py-2.5 rounded-full text-[12px] font-medium transition-all duration-500 ${
+                      cardColor === color
+                        ? color === 'black'
+                          ? 'bg-[#181818] text-white border border-white/10'
+                          : 'bg-[#f2f0eb] text-black'
+                        : 'text-white/35 hover:text-white/70'
+                    }`}
+                  >
+                    {color === 'black' ? 'Black' : 'White'}
+                  </button>
+                ))}
+              </div>
+
+              <p className="mt-4 text-[11px] font-mono tracking-[0.16em] text-white/25 uppercase">
+                {cardColor === 'black' ? 'Matte black' : 'Clean white'} · your choice
+              </p>
             </div>
 
-            {/* Minimal specs — below the object, not competing */}
-            <div className="max-w-sm mx-auto space-y-3">
+            <div className="max-w-sm mx-auto mt-20 space-y-3">
               {[
-                ['Finish', 'Matte black polycarbonate'],
-                ['NFC', 'Type 2 · 13.56 MHz · batteryless'],
+                ['Finish', cardColor === 'black' ? 'Matte black' : 'Clean white'],
+                ['Identity', 'Professional or Personal'],
+                ['NFC', 'Batteryless · one tap'],
                 ['Fallback', 'Laser-etched QR on reverse'],
-                ['If lost', 'Disable instantly from your portal'],
               ].map(([dt, dd]) => (
                 <div key={dt} className="flex justify-between text-[13px] border-b border-white/[0.04] pb-3">
                   <span className="text-white/30 font-mono text-[11px]">{dt}</span>

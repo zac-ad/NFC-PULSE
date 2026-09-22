@@ -4,7 +4,7 @@
 // @supabase/ssr needs somewhere that can both READ and WRITE the session
 // cookie on every request, to keep it refreshed before it expires.
 // Server Components can only read cookies, not write them — so that
-// job falls to middleware, which runs before every matched request.
+// job falls to proxy.ts, which runs before every matched request.
 //
 // This does not add a redirect or a visible delay for anyone. It just
 // touches the session cookie so it stays valid; if there's no session,
@@ -14,11 +14,18 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function proxy(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
