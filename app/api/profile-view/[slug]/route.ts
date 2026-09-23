@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { signedProfileMediaUrl } from '@/lib/profileMedia';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
 const SESSION_COOKIE = '__Host-pulse_viewer_session';
 
-function publicProfile(profile: Record<string, unknown>) {
+async function publicProfile(profile: Record<string, unknown>) {
   return {
     id: profile.id,
     full_name: profile.full_name,
@@ -15,8 +16,8 @@ function publicProfile(profile: Record<string, unknown>) {
     company: profile.company,
     bio: profile.bio,
     slug: profile.slug,
-    avatar_url: profile.avatar_url,
-    banner_url: profile.banner_url,
+    avatar_url: await signedProfileMediaUrl(String(profile.avatar_url || ''), 3600),
+    banner_url: await signedProfileMediaUrl(String(profile.banner_url || ''), 3600),
     is_active: profile.is_active,
     profile_type: profile.profile_type,
     // Private contact fields are deliberately omitted unless connected.
@@ -67,7 +68,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   if (!token || token.length !== 64 || !/^[0-9a-f]{64}$/.test(token)) {
     return NextResponse.json({
-      profile: publicProfile(profile),
+      profile: await publicProfile(profile),
       links: publicLinks || [],
       connected: false,
     });
@@ -84,7 +85,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   if (sessionError) {
     console.error('[profile-view] viewer session lookup failed:', sessionError.message);
     return NextResponse.json({
-      profile: publicProfile(profile),
+      profile: await publicProfile(profile),
       links: publicLinks || [],
       connected: false,
     });
@@ -92,7 +93,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   if (!session || new Date(session.expires_at) <= new Date()) {
     return NextResponse.json({
-      profile: publicProfile(profile),
+      profile: await publicProfile(profile),
       links: publicLinks || [],
       connected: false,
     });
@@ -107,7 +108,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   if (cardError) {
     console.error('[profile-view] viewer card lookup failed:', cardError.message);
     return NextResponse.json({
-      profile: publicProfile(profile),
+      profile: await publicProfile(profile),
       links: publicLinks || [],
       connected: false,
     });
@@ -116,7 +117,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   // A session can only unlock the profile attached to the card that created it.
   if (!card || card.status !== 'ACTIVE' || card.profile_id !== profile.id) {
     return NextResponse.json({
-      profile: publicProfile(profile),
+      profile: await publicProfile(profile),
       links: publicLinks || [],
       connected: false,
     });
@@ -138,13 +139,19 @@ export async function GET(request: Request, { params }: RouteContext) {
     });
   }
 
+  const connectedProfile = await publicProfile(profile);
+  const connectedLinks = await Promise.all((privateLinks || []).map(async (link) => ({
+    ...link,
+    url: link.type === 'qr' ? await signedProfileMediaUrl(link.url, 3600) : link.url,
+  })));
+
   return NextResponse.json({
     profile: {
-      ...publicProfile(profile),
+      ...connectedProfile,
       phone: profile.phone || '',
       email: profile.email || '',
     },
-    links: [...(publicLinks || []), ...(privateLinks || [])],
+    links: [...(publicLinks || []), ...connectedLinks],
     connected: true,
   });
 }
