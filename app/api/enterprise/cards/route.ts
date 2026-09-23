@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data, error } = await supabaseAdmin
+  let updateQuery = supabaseAdmin
     .from('hardware_cards')
     .update({
       status: nextStatus,
@@ -81,10 +81,15 @@ export async function POST(request: Request) {
       email: employeeEmail,
       org_id: orgId,
     })
-    .eq('id', existing.id)
-    .eq('org_id', sameOrg ? orgId : null)
-    .select()
-    .maybeSingle();
+    .eq('id', existing.id);
+
+  // Repeat the ownership/state condition in the UPDATE so a concurrent request
+  // cannot turn the initial lookup into a stale authorization decision.
+  updateQuery = sameOrg
+    ? updateQuery.eq('org_id', orgId)
+    : updateQuery.is('org_id', null).eq('status', 'UNCLAIMED');
+
+  const { data, error } = await updateQuery.select().maybeSingle();
 
   if (error) {
     console.error('[enterprise/cards POST] card update failed:', error.message);
