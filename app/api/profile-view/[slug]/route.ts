@@ -133,7 +133,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   if (privateLinksError) {
     console.error('[profile-view] connected links lookup failed:', privateLinksError.message);
     return NextResponse.json({
-      profile: publicProfile(profile),
+      profile: await publicProfile(profile),
       links: publicLinks || [],
       connected: false,
     });
