@@ -81,6 +81,6 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
 
-  const { data } = supabaseAdmin.storage.from('profile-media').getPublicUrl(path);
-  return NextResponse.json({ publicUrl: data.publicUrl });
+  const mediaUrl = await signedProfileMediaUrl(path, 3600);
+  return NextResponse.json({ publicUrl: mediaUrl });
 }
