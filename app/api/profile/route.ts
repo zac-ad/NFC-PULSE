@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
+import { canonicalProfileMediaUrl, signedProfileMediaUrl } from '@/lib/profileMedia';
 
 async function getAuthUserId(request: Request): Promise<string | null> {
   const authHeader = request.headers.get('Authorization');
@@ -30,7 +31,13 @@ export async function GET(request: Request) {
   const { data: profiles } = await supabaseAdmin
     .from('profiles').select('*').eq('account_id', account.id);
 
-  return NextResponse.json({ profiles: profiles || [], account });
+  const resolvedProfiles = await Promise.all((profiles || []).map(async (profile) => ({
+    ...profile,
+    avatar_url: await signedProfileMediaUrl(profile.avatar_url, 3600),
+    banner_url: await signedProfileMediaUrl(profile.banner_url, 3600),
+  })));
+
+  return NextResponse.json({ profiles: resolvedProfiles, account });
 }
 
 // PATCH — update a profile
@@ -66,6 +73,13 @@ export async function PATCH(request: Request) {
     if (key in body) {
       fields[key] = body[key];
     }
+  }
+
+  if ('avatar_url' in fields && typeof fields.avatar_url === 'string') {
+    fields.avatar_url = canonicalProfileMediaUrl(fields.avatar_url);
+  }
+  if ('banner_url' in fields && typeof fields.banner_url === 'string') {
+    fields.banner_url = canonicalProfileMediaUrl(fields.banner_url);
   }
 
   if (Object.keys(fields).length === 0) {

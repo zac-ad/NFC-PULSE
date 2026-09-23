@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { randomUUID } from 'crypto';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { signedProfileMediaUrl } from '@/lib/profileMedia';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = new Map([
@@ -81,6 +82,6 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
 
-  const { data } = supabaseAdmin.storage.from('profile-media').getPublicUrl(path);
-  return NextResponse.json({ publicUrl: data.publicUrl });
+  const mediaUrl = await signedProfileMediaUrl(path, 3600);
+  return NextResponse.json({ publicUrl: mediaUrl });
 }

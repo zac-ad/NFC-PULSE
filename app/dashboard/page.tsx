@@ -129,13 +129,18 @@ function DashboardContent() {
     setBannerUrl(prof.banner_url || '');
     setIsActive(prof.is_active ?? true);
 
-    // Links — direct read, public data, RLS allows it
-    const { data: profileItems } = await supabase
-      .from('profile_links')
-      .select('*')
-      .eq('profile_id', prof.id)
-      .order('position', { ascending: true });
-    setItems(profileItems || []);
+    // Links — load through the authenticated server route so private QR media
+    // is returned as a short-lived signed URL.
+    const token = await getToken();
+    if (token) {
+      const linksRes = await fetch(`/api/links?profileId=${encodeURIComponent(prof.id)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const linksJson = await linksRes.json();
+      setItems(linksJson.links || []);
+    } else {
+      setItems([]);
+    }
 
     // Card
     const { data: cardData } = await supabase
