@@ -1,4 +1,3 @@
-import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
 import { NextResponse } from 'next/server';
@@ -26,7 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   const allowed = await checkRateLimit(`tap:${ip}`, 20, 60);
   if (!allowed) return NextResponse.redirect(new URL('/card-disabled', request.url));
 
-  const { data: card } = await supabase
+  const { data: card } = await supabaseAdmin
     .from('hardware_cards')
     .select('*, profiles(*)')
     .eq('card_code', cardCode)
@@ -70,7 +69,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     const tapIp   = h.get('x-forwarded-for')     || '127.0.0.1';
     const ua      = h.get('user-agent')           || '';
 
-    await supabase.from('card_taps').insert({
+    await supabaseAdmin.from('card_taps').insert({
       card_id:    card.id,
       profile_id: card.profile_id,
       ip_address: tapIp,
@@ -80,7 +79,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
       user_agent: ua,
     });
 
-    await supabase.rpc('increment_tap_count', { card_id: card.id });
+    await supabaseAdmin.rpc('increment_tap_count', { card_id: card.id });
 
     // ── Viewer session ───────────────────────────────────────────────────────
     // Create a short-lived viewer session server-side. The bearer token is
