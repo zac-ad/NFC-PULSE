@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { createHash, randomBytes } from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -17,11 +17,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
 
   if (!cardCode) return NextResponse.redirect(new URL('/card-disabled', request.url));
 
-  // Rate limit: 20 taps per IP per minute.
-  // Redirects to /card-disabled rather than a distinct "rate limited" page
-  // so an enumerating script can't distinguish "code doesn't exist" from
-  // "you're being rate limited."
-  const ip = h.get('x-forwarded-for') || 'unknown';
+  // Rate limit: 20 taps per client IP per minute.
+  // Use the shared client-IP parser so this route cannot accidentally diverge
+  // from the other protected endpoints.
+  const ip = getClientIp(request);
   const allowed = await checkRateLimit(`tap:${ip}`, 20, 60);
   if (!allowed) return NextResponse.redirect(new URL('/card-disabled', request.url));
 
@@ -66,8 +65,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     const city    = decodeURIComponent(h.get('x-vercel-ip-city')    || 'Unknown');
     const region  = decodeURIComponent(h.get('x-vercel-ip-region')  || 'Unknown');
     const country = h.get('x-vercel-ip-country') || 'PH';
-    const tapIp   = h.get('x-forwarded-for')     || '127.0.0.1';
-    const ua      = h.get('user-agent')           || '';
+    const tapIp   = ip;
+    const ua      = h.get('user-agent') || '';
 
     await supabaseAdmin.from('card_taps').insert({
       card_id:    card.id,
