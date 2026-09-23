@@ -1,15 +1,7 @@
 // lib/requireAdmin.ts
 //
-// Single authoritative admin auth+authz check used by every /api/admin/* route.
-//
-// Performs both:
-//   Authentication — is this a valid, non-expired, non-revoked session?
-//   Authorization  — is the request coming from an expected origin?
-//
-// Usage:
-//   const check = await requireAdmin(request);
-//   if (!check.ok) return check.response;
-//   // proceed with admin action
+// Single authoritative admin authentication + authorization check used by
+// every /api/admin/* route.
 
 import { NextResponse } from 'next/server';
 import { cookies, headers } from 'next/headers';
@@ -24,21 +16,21 @@ export interface AdminCheckFailed {
   response: NextResponse;
 }
 
-// Origins that are allowed to make admin API requests.
-// In production this is your Vercel domain. In dev it's localhost.
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
+
   const allowed = [
     process.env.NEXT_PUBLIC_SITE_URL,
     'https://nfc-pulse-wine.vercel.app',
-    // Add preview URLs here if needed
-  ].filter(Boolean);
+  ].filter((value): value is string => Boolean(value));
 
   if (process.env.NODE_ENV !== 'production') {
     allowed.push('http://localhost:3000');
   }
 
-  return allowed.some(a => origin === a || origin.startsWith(a as string));
+  // Compare origins exactly. startsWith() would incorrectly accept
+  // lookalike origins such as https://nfc-pulse-wine.vercel.app.attacker.com.
+  return allowed.some((allowedOrigin) => origin === allowedOrigin);
 }
 
 export async function requireAdmin(
@@ -48,28 +40,26 @@ export async function requireAdmin(
   const fail = (msg = 'Unauthorized') =>
     ({ ok: false as const, response: NextResponse.json({ error: msg }, { status: 401 }) });
 
-  // ── 1. Origin check (CSRF protection) ─────────────────────────────────────
-  // Applies to state-changing methods. GET requests don't need it because
-  // they don't mutate data, and CSRF attacks use state-changing requests.
   const method = request.method.toUpperCase();
+
   if (!options?.skipOriginCheck && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
     const headerStore = await headers();
     const origin = headerStore.get('origin');
+
     if (!isAllowedOrigin(origin)) {
       console.warn('[requireAdmin] Origin check failed:', origin);
-      return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+      };
     }
   }
 
-  // ── 2. Session cookie ──────────────────────────────────────────────────────
   const cookieStore = await cookies();
-  const cookieName  = getAdminCookieName();
-  const sessionId   = cookieStore.get(cookieName)?.value;
+  const sessionId = cookieStore.get(getAdminCookieName())?.value;
 
   if (!sessionId) return fail();
 
-  // ── 3. Full DB session verification ───────────────────────────────────────
-  // Checks: exists, not revoked, not expired.
   const session = await verifyAdminSession(sessionId);
   if (!session) return fail();
 
