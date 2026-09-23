@@ -225,21 +225,32 @@ function DashboardContent() {
     setProfiles([]);
   };
 
-  // ── File upload ───────────────────────────────────────────────
+  // ── File upload — authenticated server route ─────────────────
   const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
+    if (!currentProfileId) return;
     if (type === 'avatar') setUploadingAvatar(true);
     if (type === 'banner') setUploadingBanner(true);
     if (type === 'qr') setUploadingQr(true);
     try {
-      const ext = file.name.split('.').pop();
-      const fileName = `${currentProfileId || 'user'}-${type}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('profile-media').upload(fileName, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from('profile-media').getPublicUrl(fileName);
-      if (type === 'avatar') setAvatarUrl(data.publicUrl);
-      if (type === 'banner') setBannerUrl(data.publicUrl);
-      if (type === 'qr') setQrImageUrl(data.publicUrl);
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const form = new FormData();
+      form.append('profileId', currentProfileId);
+      form.append('type', type);
+      form.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Upload failed');
+
+      if (type === 'avatar') setAvatarUrl(result.publicUrl);
+      if (type === 'banner') setBannerUrl(result.publicUrl);
+      if (type === 'qr') setQrImageUrl(result.publicUrl);
       setMessage({ type: 'success', text: 'File uploaded.' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed.';
