@@ -5,9 +5,11 @@ import AdminDashboardClient from './AdminDashboardClient';
 
 export default async function AdminPage() {
   const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session');
-  if (!session || !verifyAdminSession(session.value)) {
+  const session = cookieStore.get('admin_session') ?? cookieStore.get('__Host-admin_session');
+
+  if (!session || !(await verifyAdminSession(session.value))) {
     redirect('/admin/login');
   }
+
   return <AdminDashboardClient />;
 }
