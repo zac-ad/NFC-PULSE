@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { randomUUID } from 'crypto';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = new Map([
@@ -32,6 +33,16 @@ function hasValidMagic(bytes: Uint8Array, type: string): boolean {
 }
 
 export async function POST(request: Request) {
+  // Rate-limit before parsing the multipart body.
+  const ip = getClientIp(request);
+  const allowed = await checkRateLimit(`upload:${ip}`, 20, 600);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Too many uploads. Please wait a few minutes and try again.' },
+      { status: 429 }
+    );
+  }
+
   const userEmail = await getUserEmail(request);
   if (!userEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
