@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
+import { canonicalProfileMediaUrl, signedProfileMediaUrl } from '@/lib/profileMedia';
 
 async function getUserEmail(request: Request): Promise<string | null> {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
@@ -24,6 +25,33 @@ async function verifyProfileOwnership(email: string, profileId: string): Promise
   return !!profile;
 }
 
+// GET — load links for an owned profile, signing private QR media.
+export async function GET(request: Request) {
+  const email = await getUserEmail(request);
+  if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const profileId = new URL(request.url).searchParams.get('profileId');
+  if (!profileId) return NextResponse.json({ error: 'profileId required' }, { status: 400 });
+
+  const owns = await verifyProfileOwnership(email, profileId);
+  if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { data, error } = await supabaseAdmin
+    .from('profile_links')
+    .select('*')
+    .eq('profile_id', profileId)
+    .order('position', { ascending: true });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const links = await Promise.all((data || []).map(async (link) => ({
+    ...link,
+    url: link.type === 'qr' ? await signedProfileMediaUrl(link.url, 3600) : link.url,
+  })));
+
+  return NextResponse.json({ links });
+}
+
 // POST — add a link or QR
 export async function POST(request: Request) {
   const email = await getUserEmail(request);
@@ -36,13 +64,14 @@ export async function POST(request: Request) {
   }
 
   const normalizedVisibility = type === 'qr' ? 'tap' : (visibility === 'tap' ? 'tap' : 'public');
+  const storedUrl = type === 'qr' ? canonicalProfileMediaUrl(String(url)) : String(url);
 
   const owns = await verifyProfileOwnership(email, profile_id);
   if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { data, error } = await supabaseAdmin
     .from('profile_links')
-    .insert({ profile_id, title, url, type: type || 'link', position: position || 0, visibility: normalizedVisibility })
+    .insert({ profile_id, title, url: storedUrl, type: type || 'link', position: position || 0, visibility: normalizedVisibility })
     .select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
