@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
 test("profile API keeps an explicit mutation allowlist", () => {
   const source = read("app/api/profile/route.ts");
