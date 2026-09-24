@@ -17,7 +17,8 @@ test("profile API keeps an explicit mutation allowlist", () => {
 test("link mutations require profile ownership and scope by both identifiers", () => {
   const source = read("app/api/links/route.ts");
   assert.match(source, /verifyProfileOwnership\(email, profileId\)/);
-  assert.match(source, /\.eq\('id', linkId\)/);\n  assert.match(source, /\.eq\('profile_id', profileId\)/);
+  assert.match(source, /\.eq\('id', linkId\)/);
+  assert.match(source, /\.eq\('profile_id', profileId\)/);
   assert.match(source, /\.neq\('type', 'qr'\)/);
 });
 
