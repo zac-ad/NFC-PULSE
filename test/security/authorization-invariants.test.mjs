@@ -29,7 +29,7 @@ test("viewer sessions use a hashed 32-byte token and are bound to an active card
 
   assert.match(tap, /randomBytes\(32\)/);
   assert.match(tap, /createHash\('sha256'\)\.update\(token\)/);
-  assert.match(tap, /status: 'ACTIVE'/);
+  assert.match(tap, /card\.status === 'ACTIVE' && card\.profile_id/);
 
   assert.match(session, /token\.length !== 64/);
   assert.match(session, /card\.status !== 'ACTIVE'/);
