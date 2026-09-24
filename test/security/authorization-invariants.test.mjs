@@ -17,7 +17,8 @@ test("profile API keeps an explicit mutation allowlist", () => {
 test("link mutations require profile ownership and scope by both identifiers", () => {
   const source = read("app/api/links/route.ts");
   assert.match(source, /verifyProfileOwnership\(email, profileId\)/);
-  assert.match(source, /\.eq\('id', linkId\)\.eq\('profile_id', profileId\)/);
+  assert.match(source, /\.eq\('id', linkId\)/);
+  assert.match(source, /\.eq\('profile_id', profileId\)/);
   assert.match(source, /\.neq\('type', 'qr'\)/);
 });
 
@@ -29,7 +30,7 @@ test("viewer sessions use a hashed 32-byte token and are bound to an active card
 
   assert.match(tap, /randomBytes\(32\)/);
   assert.match(tap, /createHash\('sha256'\)\.update\(token\)/);
-  assert.match(tap, /status: 'ACTIVE'/);
+  assert.match(tap, /card\.status === 'ACTIVE' && card\.profile_id/);
 
   assert.match(session, /token\.length !== 64/);
   assert.match(session, /card\.status !== 'ACTIVE'/);
