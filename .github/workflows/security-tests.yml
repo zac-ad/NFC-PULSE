@@ -1,0 +1,29 @@
+name: Security regression tests
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "supabase/migrations/**"
+      - "test/**"
+      - "package.json"
+      - ".github/workflows/security-tests.yml"
+  push:
+    branches:
+      - main
+
+jobs:
+  authorization-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run authorization regression tests
+        run: node --test test/**/*.test.mjs
