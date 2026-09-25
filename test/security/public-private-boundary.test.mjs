@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
 test("database public profile projection excludes private contact and ownership fields", () => {
-  const migration = read("supabase/migrations/20260924230000_public_private_db_boundary.sql");
+  const migration = read("supabase/migrations/20260924071320_public_private_db_boundary.sql");
 
   assert.match(migration, /create or replace view public\.public_profiles/);
   assert.match(migration, /where is_active = true/);
@@ -16,7 +16,7 @@ test("database public profile projection excludes private contact and ownership 
 });
 
 test("database public link projection only exposes public non-QR links", () => {
-  const migration = read("supabase/migrations/20260924230000_public_private_db_boundary.sql");
+  const migration = read("supabase/migrations/20260924071320_public_private_db_boundary.sql");
 
   assert.match(migration, /create or replace view public\.public_profile_links/);
   assert.match(migration, /pl\.visibility = 'public'/);

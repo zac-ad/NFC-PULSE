@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
 test("public projection views are explicitly read-only for browser roles", () => {
-  const migration = read("supabase/migrations/20260924232000_public_view_grants_hardening.sql");
+  const migration = read("supabase/migrations/20260924071741_public_view_grants_hardening.sql");
 
   assert.match(migration, /revoke all privileges on table public\.public_profiles from public, anon, authenticated/);
   assert.match(migration, /revoke all privileges on table public\.public_profile_links from public, anon, authenticated/);
