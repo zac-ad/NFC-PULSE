@@ -40,7 +40,7 @@ test("activate_card is exposed only through the server-side function path", () =
   assert.match(source, /create or replace function\s+(?:public\.)?activate_card/i);
   assert.match(source, /security definer/i);
   assert.match(source, /revoke execute on function activate_card/i);
-  assert.match(source, /grant execute on function public\.activate_card/i);
+  assert.match(source, /grant execute on function (?:public\.)?activate_card/i);
 });
 
 test("activation function locks the card row and only accepts UNCLAIMED cards", () => {
