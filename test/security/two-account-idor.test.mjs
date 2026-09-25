@@ -11,7 +11,7 @@ test("profile PATCH cannot cross account ownership boundaries", () => {
     /\.from\('profiles'\)\.select\('id'\)\.eq\('id', profileId\)\.eq\('account_id', account\.id\)\.maybeSingle\(\)/
   );
   assert.match(source, /\.from\('profiles'\)\.update\(fields\)\.eq\('id', profileId\)/);
-  assert.match(source, /account_id.*protected|account_id.*allowedFields/i);
+  assert.match(source, /account_id, profile_type, created_at/);
 });
 
 test("profile GET is scoped to the authenticated account", () => {
