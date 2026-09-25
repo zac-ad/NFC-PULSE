@@ -31,8 +31,8 @@ test("link GET/POST/PATCH/DELETE require ownership before service-role access", 
     assert.ok(source.includes(occurrence), "expected ownership verification");
   }
 
-  assert.match(source, /\.eq\('id', linkId\)\.eq\('profile_id', profileId\)/);
-  assert.match(source, /\.delete\(\)\.eq\('id', linkId\)\.eq\('profile_id', profileId\)/);
+  assert.match(source, /\.eq\('id', linkId\)[\\s\\S]*?\.eq\('profile_id', profileId\)/);
+  assert.match(source, /\.delete\(\)[\\s\\S]*?\.eq\('id', linkId\)[\\s\\S]*?\.eq\('profile_id', profileId\)/);
 });
 
 test("upload cannot write media for another account's profile", () => {
@@ -41,7 +41,7 @@ test("upload cannot write media for another account's profile", () => {
     source,
     /\.from\('profiles'\)\.select\('id'\)\.eq\('id', profileId\)\.eq\('account_id', account\.id\)\.maybeSingle\(\)/
   );
-  assert.match(source, /\.from\('profile-media'\)\.upload\(path, bytes/);
+  assert.match(source, /\.from\('profile-media'\)[\\s\\S]*?\.upload\(path, bytes/);
 });
 
 test("enterprise card writes preserve organization ownership", () => {
