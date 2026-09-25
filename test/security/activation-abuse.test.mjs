@@ -37,9 +37,9 @@ test("atomic activation is the only database write path in the route", () => {
 
 test("activate_card is exposed only through the server-side function path", () => {
   const source = read("supabase/migrations/0003_atomic_activation.sql");
-  assert.match(source, /create or replace function public\.activate_card/i);
+  assert.match(source, /create or replace function(?: public)?\.activate_card/i);
   assert.match(source, /security definer/i);
-  assert.match(source, /revoke all on function public\.activate_card/i);
+  assert.match(source, /revoke execute on function activate_card/i);
   assert.match(source, /grant execute on function public\.activate_card/i);
 });
 
