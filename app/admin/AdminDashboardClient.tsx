@@ -33,7 +33,6 @@ async function adminFetch(url: string, method: string, body: object) {
 export default function AdminDashboardClient() {
   const [cards, setCards]     = useState<HardwareCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newCode, setNewCode] = useState('');
   const [search, setSearch]   = useState('');
   const [tab, setTab]         = useState<'cards' | 'users' | 'activity'>('cards');
   const [actions, setActions] = useState<{ id: string; action: string; card_code: string | null; detail: string | null; created_at: string }[]>([]);
@@ -87,7 +86,6 @@ export default function AdminDashboardClient() {
       showMessage('error', body.error || 'Failed to register card.');
     } else {
       showMessage('success', `Card ${body.card?.card_code || 'generated card'} registered.`);
-      setNewCode('');
       fetchCards();
       fetchActions();
     }
