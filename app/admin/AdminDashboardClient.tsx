@@ -33,7 +33,6 @@ async function adminFetch(url: string, method: string, body: object) {
 export default function AdminDashboardClient() {
   const [cards, setCards]     = useState<HardwareCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newCode, setNewCode] = useState('');
   const [search, setSearch]   = useState('');
   const [tab, setTab]         = useState<'cards' | 'users' | 'activity'>('cards');
   const [actions, setActions] = useState<{ id: string; action: string; card_code: string | null; detail: string | null; created_at: string }[]>([]);
@@ -78,17 +77,15 @@ export default function AdminDashboardClient() {
 
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCode.trim() || working) return;
+    if (working) return;
     setWorking(true);
     setMessage(null);
-    const code = newCode.trim().toUpperCase();
-    const res = await adminFetch('/api/admin/cards', 'POST', { card_code: code });
+    const res = await adminFetch('/api/admin/cards', 'POST', {});
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       showMessage('error', body.error || 'Failed to register card.');
     } else {
-      showMessage('success', `Card ${code} registered.`);
-      setNewCode('');
+      showMessage('success', `Card ${body.card?.card_code || 'generated card'} registered.`);
       fetchCards();
       fetchActions();
     }
@@ -291,16 +288,11 @@ export default function AdminDashboardClient() {
         {/* Register card */}
         <div className="space-y-3">
           <h2 className="font-serif text-lg text-white">Register new card</h2>
+          <p className="text-[12px] text-white/35">PULSE generates a secure card code automatically.</p>
           <form onSubmit={handleAddCard} className="flex gap-3">
-            <input
-              type="text" value={newCode} aria-label="Card code"
-              onChange={e => setNewCode(e.target.value.toUpperCase())}
-              placeholder="CARD-CODE" required
-              className={`flex-1 ${inputCls} font-mono uppercase`}
-            />
             <button type="submit" disabled={working}
               className="px-6 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors disabled:opacity-50">
-              {working ? 'Registering…' : 'Register'}
+              {working ? 'Generating…' : 'Generate & register card'}
             </button>
           </form>
         </div>
