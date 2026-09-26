@@ -15,7 +15,7 @@ test("prepare rotation never replaces the live card code", () => {
   const source = read("app/api/admin/cards/[id]/rotate/route.ts");
   const prepareBlock = source.slice(0, source.indexOf("if (!card.pending_card_code)"));
   assert.match(prepareBlock, /pending_card_code:\s*replacementCode/);
-  assert.doesNotMatch(prepareBlock, /update\(\{[\s\S]*card_code:\s*replacementCode/);
+  assert.doesNotMatch(prepareBlock, /(?<!pending_)card_code:\s*replacementCode/);
 });
 
 test("finalization swaps to the pending code and clears the pending credential", () => {
