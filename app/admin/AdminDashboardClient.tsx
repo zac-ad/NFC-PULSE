@@ -9,6 +9,8 @@ interface HardwareCard {
   profile_id: string | null;
   tap_count: number;
   created_at: string;
+  pending_card_code: string | null;
+  pending_card_code_created_at: string | null;
   profiles?: { full_name?: string; email?: string; slug?: string; account_id?: string } | null;
 }
 
@@ -73,6 +75,36 @@ export default function AdminDashboardClient() {
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
+  };
+
+  const handleRotate = async (card: HardwareCard, action: 'prepare' | 'finalize' | 'discard') => {
+    if (working) return;
+    setWorking(true);
+    setMessage(null);
+
+    const res = await adminFetch(`/api/admin/cards/${card.id}/rotate`, 'POST', { action });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      showMessage('error', body.error || 'Card rotation failed.');
+    } else if (action === 'prepare') {
+      showMessage(
+        'success',
+        `Replacement prepared: ${body.card?.pending_card_code || 'code generated'}. Encode and verify the physical NFC/QR before finalizing.`
+      );
+      fetchCards();
+      fetchActions();
+    } else if (action === 'finalize') {
+      showMessage('success', 'Card rotation finalized. The previous code is no longer valid.');
+      fetchCards();
+      fetchActions();
+    } else {
+      showMessage('success', 'Pending card rotation discarded. The current code remains active.');
+      fetchCards();
+      fetchActions();
+    }
+
+    setWorking(false);
   };
 
   const handleAddCard = async (e: React.FormEvent) => {
@@ -335,7 +367,14 @@ export default function AdminDashboardClient() {
               <tbody className="divide-y divide-white/[0.04]">
                 {filtered.length > 0 ? filtered.map(card => (
                   <tr key={card.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-5 py-4 font-mono font-bold text-white">{card.card_code}</td>
+                    <td className="px-5 py-4 font-mono font-bold text-white">
+                      <div>{card.card_code}</div>
+                      {card.pending_card_code && (
+                        <div className="mt-1 text-[10px] font-normal text-amber-300/70">
+                          Pending: {card.pending_card_code}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-5 py-4">
                       {card.profiles?.full_name ? (
                         <div>
@@ -378,6 +417,34 @@ export default function AdminDashboardClient() {
                           <button onClick={() => openEnable(card)}
                             className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/50 hover:bg-white/10 border border-white/[0.06] transition-colors">
                             Enable
+                          </button>
+                        )}
+                        {card.pending_card_code ? (
+                          <>
+                            <button
+                              onClick={() => handleRotate(card, 'finalize')}
+                              disabled={working}
+                              title="Only finalize after the physical NFC/QR payload has been rewritten and tested."
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/70 hover:bg-white/10 border border-white/10 transition-colors disabled:opacity-50"
+                            >
+                              Finalize rotation
+                            </button>
+                            <button
+                              onClick={() => handleRotate(card, 'discard')}
+                              disabled={working}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-red-950/30 text-red-400/80 hover:bg-red-950/60 border border-red-900/30 transition-colors disabled:opacity-50"
+                            >
+                              Discard
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleRotate(card, 'prepare')}
+                            disabled={working}
+                            title="Generates a replacement code without invalidating the current code."
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/50 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
+                          >
+                            Prepare rotation
                           </button>
                         )}
                       </div>
