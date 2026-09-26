@@ -290,16 +290,11 @@ export default function AdminDashboardClient() {
         {/* Register card */}
         <div className="space-y-3">
           <h2 className="font-serif text-lg text-white">Register new card</h2>
+          <p className="text-[12px] text-white/35">PULSE generates a secure card code automatically.</p>
           <form onSubmit={handleAddCard} className="flex gap-3">
-            <input
-              type="text" value={newCode} aria-label="Card code"
-              onChange={e => setNewCode(e.target.value.toUpperCase())}
-              placeholder="CARD-CODE" required
-              className={`flex-1 ${inputCls} font-mono uppercase`}
-            />
             <button type="submit" disabled={working}
               className="px-6 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb] transition-colors disabled:opacity-50">
-              {working ? 'Registering…' : 'Register'}
+              {working ? 'Generating…' : 'Generate & register card'}
             </button>
           </form>
         </div>
