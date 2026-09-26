@@ -78,16 +78,15 @@ export default function AdminDashboardClient() {
 
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCode.trim() || working) return;
+    if (working) return;
     setWorking(true);
     setMessage(null);
-    const code = newCode.trim().toUpperCase();
-    const res = await adminFetch('/api/admin/cards', 'POST', { card_code: code });
+    const res = await adminFetch('/api/admin/cards', 'POST', {});
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       showMessage('error', body.error || 'Failed to register card.');
     } else {
-      showMessage('success', `Card ${code} registered.`);
+      showMessage('success', `Card ${body.card?.card_code || 'generated card'} registered.`);
       setNewCode('');
       fetchCards();
       fetchActions();
