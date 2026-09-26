@@ -79,6 +79,20 @@ export default function AdminDashboardClient() {
 
   const handleRotate = async (card: HardwareCard, action: 'prepare' | 'finalize' | 'discard') => {
     if (working) return;
+
+    if (
+      action === 'finalize' &&
+      !window.confirm('Only finalize after the physical NFC/QR payload has been rewritten and tested. Continue?')
+    ) {
+      return;
+    }
+
+    if (
+      action === 'discard' &&
+      !window.confirm('Discard the pending replacement code? The current card code will remain active.')
+    ) {
+      return;
+    }
     setWorking(true);
     setMessage(null);
 
