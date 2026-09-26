@@ -3,7 +3,7 @@ import { generateCardCode } from '@/lib/cardCode';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-type RotationAction = 'prepare' | 'finalize';
+type RotationAction = 'prepare' | 'finalize' | 'discard';
 
 export async function POST(
   request: Request,
@@ -25,8 +25,8 @@ export async function POST(
     return NextResponse.json({ error: 'A valid action is required.' }, { status: 400 });
   }
 
-  if (action !== 'prepare' && action !== 'finalize') {
-    return NextResponse.json({ error: 'Action must be prepare or finalize.' }, { status: 400 });
+  if (action !== 'prepare' && action !== 'finalize' && action !== 'discard') {
+    return NextResponse.json({ error: 'Action must be prepare, finalize, or discard.' }, { status: 400 });
   }
 
   const { data: card, error: lookupError } = await supabaseAdmin
@@ -47,9 +47,7 @@ export async function POST(
   if (action === 'prepare') {
     if (card.pending_card_code) {
       return NextResponse.json(
-        {
-          error: 'This card already has a pending replacement code. Finalize or discard that rotation first.',
-        },
+        { error: 'This card already has a pending replacement code. Finalize or discard that rotation first.' },
         { status: 409 }
       );
     }
@@ -103,9 +101,47 @@ export async function POST(
     );
   }
 
+  if (action === 'discard') {
+    const { data: discarded, error: discardError } = await supabaseAdmin
+      .from('hardware_cards')
+      .update({
+        pending_card_code: null,
+        pending_card_code_created_at: null,
+      })
+      .eq('id', id)
+      .eq('pending_card_code', card.pending_card_code)
+      .select('id, status')
+      .maybeSingle();
+
+    if (discardError) {
+      console.error('[admin/cards/rotate discard]', discardError.message);
+      return NextResponse.json({ error: 'Could not discard the pending rotation.' }, { status: 500 });
+    }
+
+    if (!discarded) {
+      return NextResponse.json(
+        { error: 'Card rotation changed before discard. No pending code was removed.' },
+        { status: 409 }
+      );
+    }
+
+    await supabaseAdmin.from('admin_actions').insert({
+      action: 'DISCARD_CARD_ROTATION',
+      card_code: card.card_code,
+      detail: `Discarded pending card-code rotation for card ${card.id} (session: ${check.session.id}).`,
+    });
+
+    return NextResponse.json({
+      success: true,
+      action: 'discard',
+      card: discarded,
+      currentCodeStillActive: true,
+    });
+  }
+
   // The current code remains valid until this single update succeeds.
-  // The unique card_code constraint atomically prevents a collision with
-  // another live credential. No alias to the old code is retained.
+  // The unique card_code constraint prevents a live-credential collision.
+  // No alias to the old code is retained after finalization.
   const { data: finalized, error: finalizeError } = await supabaseAdmin
     .from('hardware_cards')
     .update({
