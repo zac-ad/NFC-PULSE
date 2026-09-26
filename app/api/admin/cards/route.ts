@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireAdmin } from '@/lib/requireAdmin';
+import { generateCardCode } from '@/lib/cardCode';
 
 export async function GET(request: Request) {
   const check = await requireAdmin(request, { skipOriginCheck: true });
@@ -25,12 +26,9 @@ export async function POST(request: Request) {
   const check = await requireAdmin(request);
   if (!check.ok) return check.response;
 
-  const { card_code } = await request.json();
-  if (!card_code?.trim()) {
-    return NextResponse.json({ error: 'Card code is required.' }, { status: 400 });
-  }
-
-  const code = card_code.trim().toUpperCase();
+  // Card codes are credentials. They must be generated server-side with
+  // cryptographically secure randomness; callers cannot choose or predict them.
+  const code = generateCardCode();
 
   const { data, error } = await supabaseAdmin
     .from('hardware_cards')
@@ -40,10 +38,10 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error('[admin/cards POST]', error.message);
-    const msg = error.message.includes('unique')
-      ? `Card code ${code} already exists.`
-      : 'Could not register card. Please try again.';
-    return NextResponse.json({ error: msg }, { status: 409 });
+    return NextResponse.json(
+      { error: 'Could not register card. Please try again.' },
+      { status: 500 }
+    );
   }
 
   await supabaseAdmin.from('admin_actions').insert({
