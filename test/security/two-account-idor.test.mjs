@@ -71,3 +71,20 @@ test("browser roles cannot bypass the database private profile boundary", () => 
   assert.match(grants, /revoke all privileges on table public\.public_profiles from public, anon, authenticated/);
   assert.match(grants, /revoke all privileges on table public\.public_profile_links from public, anon, authenticated/);
 });
+
+test("dashboard telemetry reads use an authenticated server route with account ownership checks", () => {
+  const route = read("app/api/dashboard/telemetry/route.ts");
+  const dashboard = read("app/dashboard/page.tsx");
+
+  assert.match(route, /authHeader\?\.startsWith\('Bearer '\)/);
+  assert.match(route, /\.from\('accounts'\)[\s\S]*?\.select\('id'\)[\s\S]*?\.eq\('email', userEmail\)/);
+  assert.match(route, /\.from\('profiles'\)[\s\S]*?\.select\('id'\)[\s\S]*?\.eq\('id', profileId\)[\s\S]*?\.eq\('account_id', account\.id\)/);
+  assert.match(route, /\.from\('hardware_cards'\)[\s\S]*?\.select\('card_code, tap_count'\)/);
+  assert.match(route, /\.from\('card_taps'\)/);
+  assert.match(route, /function noStoreJson\(/);
+  assert.match(route, /Cache-Control', 'private, no-store, max-age=0'/);
+
+  assert.match(dashboard, /\/api\/dashboard\/telemetry\?profileId=/);
+  assert.doesNotMatch(dashboard, /\.from\('hardware_cards'\)/);
+  assert.doesNotMatch(dashboard, /\.from\('card_taps'\)/);
+});
