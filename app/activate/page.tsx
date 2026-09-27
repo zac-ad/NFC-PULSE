@@ -131,7 +131,7 @@ function ActivateContent() {
         email: email.trim().toLowerCase(),
         options: {
           emailRedirectTo: typeof window !== 'undefined'
-            ? `${window.location.origin}/dashboard`
+            ? `${window.location.origin}/auth/callback?next=%2Fdashboard`
             : undefined,
         },
       });
