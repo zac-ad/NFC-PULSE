@@ -54,9 +54,9 @@ export async function POST(
       );
     }
 
-    if (card.status !== 'UNCLAIMED') {
+    if (card.status !== 'UNCLAIMED' && card.status !== 'ACTIVE') {
       return NextResponse.json(
-        { error: 'Legacy-code migration is limited to unclaimed cards. Active or deactivated cards require a coordinated physical migration.' },
+        { error: 'Legacy-code migration is limited to active or unclaimed cards. Deactivated cards require re-enabling before rotation.' },
         { status: 409 }
       );
     }
@@ -77,7 +77,7 @@ export async function POST(
         pending_card_code_created_at: new Date().toISOString(),
       })
       .eq('id', id)
-      .eq('status', 'UNCLAIMED')
+       .in('status', ['UNCLAIMED', 'ACTIVE'])
       .eq('card_code', card.card_code)
       .is('pending_card_code', null)
       .select('id, status, card_code, pending_card_code, pending_card_code_created_at')
@@ -157,9 +157,9 @@ export async function POST(
     });
   }
 
-  if (card.status !== 'UNCLAIMED' || !LEGACY_CARD_CODE_PATTERN.test(card.card_code)) {
+  if ((card.status !== 'UNCLAIMED' && card.status !== 'ACTIVE') || !LEGACY_CARD_CODE_PATTERN.test(card.card_code)) {
     return NextResponse.json(
-      { error: 'Legacy-code finalization is limited to an unclaimed legacy card. No code was replaced.' },
+      { error: 'Legacy-code finalization is limited to an active or unclaimed legacy card. No code was replaced.' },
       { status: 409 }
     );
   }
@@ -175,7 +175,7 @@ export async function POST(
       pending_card_code_created_at: null,
     })
     .eq('id', id)
-    .eq('status', 'UNCLAIMED')
+     .in('status', ['UNCLAIMED', 'ACTIVE'])
     .eq('card_code', card.card_code)
     .eq('pending_card_code', card.pending_card_code)
     .select('id, card_code, status')
