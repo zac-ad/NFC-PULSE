@@ -49,3 +49,21 @@ test("rotation has explicit pending-state guards", () => {
   assert.match(source, /already has a pending replacement code/);
   assert.match(source, /No pending replacement code exists/);
 });
+
+
+test("legacy migration only prepares unclaimed legacy-format cards", () => {
+  const source = read("app/api/admin/cards/[id]/rotate/route.ts");
+  assert.match(source, /card\.status !== 'UNCLAIMED'/);
+  assert.match(source, /LEGACY_CARD_CODE_PATTERN/);
+  assert.match(source, /Legacy-code migration is limited to unclaimed cards/);
+  assert.match(source, /does not need legacy migration/);
+});
+
+test("legacy finalization rechecks status and legacy format to prevent stale-state rotation", () => {
+  const source = read("app/api/admin/cards/[id]/rotate/route.ts");
+  const finalizeBlock = source.slice(source.indexOf("if (card.status !== 'UNCLAIMED' || !LEGACY_CARD_CODE_PATTERN.test(card.card_code))"));
+  assert.match(finalizeBlock, /Legacy-code finalization is limited to an unclaimed legacy card/);
+  assert.match(finalizeBlock, /\.eq\(['"]status['"], ['"]UNCLAIMED['"]\)/);
+  assert.match(finalizeBlock, /\.eq\(['"]card_code['"], card\.card_code\)/);
+  assert.match(finalizeBlock, /\.eq\(['"]pending_card_code['"], card\.pending_card_code\)/);
+});
