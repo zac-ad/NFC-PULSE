@@ -24,3 +24,15 @@ test("database public link projection only exposes public non-QR links", () => {
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
   assert.match(migration, /grant select on table public\.public_profile_links to anon, authenticated/);
 });
+
+
+test("connected profile responses are explicitly private and non-cacheable", () => {
+  const route = read("app/api/profile-view/[slug]/route.ts");
+
+  assert.match(
+    route,
+    /response\.headers\.set\(['"]Cache-Control['"],\s*['"]private, no-store, max-age=0['"]\)/
+  );
+  assert.match(route, /connected:\s*true/);
+  assert.match(route, /phone:\s*profile\.phone\s*\|\|\s*['"]['"]/);
+});
