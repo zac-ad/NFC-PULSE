@@ -17,6 +17,12 @@ import { cookies } from 'next/headers';
 
 const INACTIVITY_MINUTES = 30;
 
+function noStoreJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  return response;
+}
+
 // ── GET — validate and refresh an existing session ─────────────────────────
 export async function GET() {
   // The viewer credential is an HttpOnly cookie. It is intentionally not
@@ -42,7 +48,7 @@ export async function GET() {
   if (lookupError) {
     console.error('[viewer-session GET] session lookup failed:', lookupError.message);
     // Fail closed: if the session cannot be verified, do not trust it.
-    return NextResponse.json({ active: false, reason: 'verification_failed' }, { status: 503 });
+    return noStoreJson({ active: false, reason: 'verification_failed' }, { status: 503 });
   }
 
   if (!session) {
@@ -69,7 +75,7 @@ export async function GET() {
   if (cardError) {
     console.error('[viewer-session GET] card status lookup failed:', cardError.message);
     // Fail closed: an unverified card must not keep an active viewer session.
-    return NextResponse.json({ active: false, reason: 'verification_failed' }, { status: 503 });
+    return noStoreJson({ active: false, reason: 'verification_failed' }, { status: 503 });
   }
 
   if (!card || card.status !== 'ACTIVE') {
@@ -91,7 +97,7 @@ export async function GET() {
   if (updateError) {
     console.error('[viewer-session GET] timer refresh failed:', updateError.message);
     // Do not extend a session we failed to persist. Return its existing expiry.
-    return NextResponse.json({ active: true, expires_at: session.expires_at });
+    return noStoreJson({ active: true, expires_at: session.expires_at });
   }
 
   // Keep the browser cookie aligned with the inactivity window.
@@ -103,12 +109,12 @@ export async function GET() {
     maxAge: INACTIVITY_MINUTES * 60,
   });
 
-  return NextResponse.json({ active: true, expires_at: newExpiry });
+  return noStoreJson({ active: true, expires_at: newExpiry });
 }
 
 // ── POST ─────────────────────────────────────────────────────────────────────
 // Session creation is intentionally server-only in /t/[code]. There is no
 // public POST endpoint that accepts a card_id or creates viewer credentials.
 export async function POST() {
-  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
+  return noStoreJson({ error: 'Method not allowed' }, { status: 405 });
 }
