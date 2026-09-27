@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 import { parseDevice } from '@/lib/parseDevice';
@@ -142,23 +141,28 @@ function DashboardContent() {
       setItems([]);
     }
 
-    // Card
-    const { data: cardData } = await supabase
-      .from('hardware_cards')
-      .select('card_code, tap_count')
-      .eq('profile_id', prof.id)
-      .maybeSingle();
-    setAssignedCardCode(cardData?.card_code || null);
-    setTapCount(cardData?.tap_count || 0);
-
-    // Recent taps
-    const { data: tapsData } = await supabase
-      .from('card_taps')
-      .select('id, created_at, city, country, user_agent')
-      .eq('profile_id', prof.id)
-      .order('created_at', { ascending: false })
-      .limit(5);
-    setRecentTaps(tapsData || []);
+    // Card + telemetry — load through the authenticated server route.
+    const telemetryToken = await getToken();
+    if (telemetryToken) {
+      const telemetryRes = await fetch(
+        `/api/dashboard/telemetry?profileId=${encodeURIComponent(prof.id)}`,
+        { headers: { Authorization: `Bearer ${telemetryToken}` } }
+      );
+      const telemetryJson = await telemetryRes.json();
+      if (telemetryRes.ok) {
+        setAssignedCardCode(telemetryJson.card?.card_code || null);
+        setTapCount(telemetryJson.card?.tap_count || 0);
+        setRecentTaps(telemetryJson.taps || []);
+      } else {
+        setAssignedCardCode(null);
+        setTapCount(0);
+        setRecentTaps([]);
+      }
+    } else {
+      setAssignedCardCode(null);
+      setTapCount(0);
+      setRecentTaps([]);
+    }
   };
 
   const loadProfiles = useCallback(async () => {
