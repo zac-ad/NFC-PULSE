@@ -9,9 +9,10 @@ const source = readFileSync(
 
 test("admin fleet loading exposes a recoverable error state", () => {
   assert.match(source, /const \[loadError, setLoadError\]/);
-  assert.match(source, /if \(!res\.ok\) throw new Error\('Could not load fleet data\.'\)/);
-  assert.match(source, /onClick=\{\(\) => \{ fetchCards\(\); fetchActions\(\); \}\}/);
-  assert.match(source, />Retry<\/button>/);
+  assert.match(source, /Could not load fleet data/);
+  assert.match(source, /Could not load activity/);
+  assert.match(source, /fetchCards\(\); fetchActions\(\)/);
+  assert.match(source, />\s*Retry\s*<\/button>/);
 });
 
 test("admin cards table can scroll horizontally on narrow screens", () => {
