@@ -2,6 +2,10 @@
 //
 // Database-backed rate limiting. If the limiter cannot be verified,
 // protected endpoints fail closed instead of becoming unlimited.
+//
+// Vercel calculates the client IP at its proxy layer and exposes it
+// through x-real-ip. Prefer that trusted value over x-forwarded-for.
+// x-forwarded-for remains a fallback for local/non-Vercel execution.
 
 import { supabaseAdmin } from './supabaseAdmin';
 
@@ -25,7 +29,12 @@ export async function checkRateLimit(
 }
 
 export function getClientIp(request: Request): string {
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) {
+    return realIp;
+  }
+
   const forwarded = request.headers.get('x-forwarded-for');
   const ip = forwarded?.split(',')[0].trim();
-  return ip || request.headers.get('x-real-ip')?.trim() || 'unknown';
+  return ip || 'unknown';
 }
