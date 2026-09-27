@@ -45,6 +45,7 @@ test("viewer-session responses are explicitly non-cacheable", () => {
   assert.match(source, /function noStoreJson\(/);
   assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
   assert.doesNotMatch(source, /return NextResponse\.json\(/);
+  assert.doesNotMatch(source, /const response = NextResponse\.json\(/);
 });
 
 test("vCard rejects requests without a valid viewer session", () => {
