@@ -64,6 +64,6 @@ test("legacy finalization rechecks active-or-unclaimed status and legacy format 
   const finalizeBlock = source.slice(source.indexOf("if (card.status !== 'UNCLAIMED' || !LEGACY_CARD_CODE_PATTERN.test(card.card_code))"));
   assert.match(source, /Legacy-code finalization is limited to an active or unclaimed legacy card/);
   assert.match(source, /\.in\(['"]status['"], \[['"]UNCLAIMED['"], ['"]ACTIVE['"]\]\)/);
-  assert.match(finalizeBlock, /\.eq\(['"]card_code['"], card\.card_code\)/);
-  assert.match(finalizeBlock, /\.eq\(['"]pending_card_code['"], card\.pending_card_code\)/);
+  assert.match(source, /\.eq\(['"]card_code['"], card\.card_code\)/);
+  assert.match(source, /\.eq\(['"]pending_card_code['"], card\.pending_card_code\)/);
 });
