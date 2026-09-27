@@ -128,6 +128,9 @@ export default function LandingPage() {
             <Link href="/features" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">
               Features
             </Link>
+            <Link href="/updates" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">
+              Updates
+            </Link>
             <Link href="/portal" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">
               Log in
             </Link>
@@ -583,6 +586,7 @@ export default function LandingPage() {
               <Link href="/portal/personal/login"     className="hover:text-white/50 transition-colors">Personal</Link>
               <Link href="/enterprise/login"          className="hover:text-white/50 transition-colors">Enterprise</Link>
               <Link href="/support"                   className="hover:text-white/50 transition-colors">Support</Link>
+              <Link href="/updates"                  className="hover:text-white/50 transition-colors">Updates</Link>
               <Link href="/privacy"                   className="hover:text-white/50 transition-colors">Privacy</Link>
               <Link href="/terms"                     className="hover:text-white/50 transition-colors">Terms</Link>
               <Link href="/refund"                    className="hover:text-white/50 transition-colors">Refunds</Link>

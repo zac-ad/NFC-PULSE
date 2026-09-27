@@ -77,6 +77,7 @@ export default function FeaturesPage() {
           </Link>
           <div className="flex items-center gap-6">
             <Link href="/features" className="text-[13px] text-white/80">Features</Link>
+            <Link href="/updates" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">Updates</Link>
             <Link href="/portal" className="text-[13px] text-white/40 hover:text-white/80 transition-colors">Log in</Link>
             <Link href="/onboarding" className="text-[13px] text-white/80 hover:text-white transition-colors border-b border-white/20 hover:border-white/50 pb-px">
               Get your card
@@ -182,6 +183,7 @@ export default function FeaturesPage() {
           <span>PULSE · {new Date().getFullYear()}</span>
           <div className="flex gap-6 flex-wrap justify-center">
             <Link href="/features" className="hover:text-white/50 transition-colors">Features</Link>
+            <Link href="/updates" className="hover:text-white/50 transition-colors">Updates</Link>
             <Link href="/portal" className="hover:text-white/50 transition-colors">Log in</Link>
             <Link href="/privacy" className="hover:text-white/50 transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-white/50 transition-colors">Terms</Link>
