@@ -79,11 +79,12 @@ export async function GET(
   const ua = request.headers.get('user-agent') || '';
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
-  return new NextResponse(vcardLines, {
+  const response = new NextResponse(vcardLines, {
     headers: {
       'Content-Type': 'text/vcard; charset=utf-8',
       'Content-Disposition': `${isIOS ? 'inline' : 'attachment'}; filename="${slug}.vcf"`,
-      'Cache-Control': 'private, no-store',
     },
   });
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  return response;
 }
