@@ -137,6 +137,7 @@ function ActivateContent() {
       });
 
       if (otpError) {
+        setLoginLinkSent(false);
         // Card is already activated at this point — just tell them to log in manually
         setMessage({
           type: 'success',
