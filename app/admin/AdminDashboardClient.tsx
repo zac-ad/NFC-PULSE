@@ -35,6 +35,7 @@ async function adminFetch(url: string, method: string, body: object) {
 export default function AdminDashboardClient() {
   const [cards, setCards]     = useState<HardwareCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch]   = useState('');
   const [tab, setTab]         = useState<'cards' | 'users' | 'activity'>('cards');
   const [actions, setActions] = useState<{ id: string; action: string; card_code: string | null; detail: string | null; created_at: string }[]>([]);
@@ -44,19 +45,27 @@ export default function AdminDashboardClient() {
 
   const fetchCards = async () => {
     setLoading(true);
-    const res = await fetch('/api/admin/cards');
-    if (res.ok) {
+    setLoadError(null);
+    try {
+      const res = await fetch('/api/admin/cards');
+      if (!res.ok) throw new Error('Could not load fleet data.');
       const { cards: data } = await res.json();
       setCards(data || []);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load fleet data.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchActions = async () => {
-    const res = await fetch('/api/admin/activity');
-    if (res.ok) {
+    try {
+      const res = await fetch('/api/admin/activity');
+      if (!res.ok) throw new Error('Could not load activity.');
       const { actions: data } = await res.json();
       setActions(data || []);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load activity.');
     }
   };
 
@@ -320,6 +329,19 @@ export default function AdminDashboardClient() {
           </div>
         </div>
 
+        {loadError && (
+          <div className="px-4 py-3 rounded-xl text-[13px] border border-red-900/50 bg-red-950/30 text-red-400 flex items-center justify-between gap-4">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={() => { fetchCards(); fetchActions(); }}
+              className="shrink-0 text-[12px] text-white/70 hover:text-white underline underline-offset-4"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Message */}
         {message && (
           <div className={`px-4 py-3 rounded-xl text-[13px] border ${
@@ -367,7 +389,7 @@ export default function AdminDashboardClient() {
 
         {/* Cards table */}
         {tab === 'cards' && (
-          <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+          <div className="rounded-2xl border border-white/[0.06] overflow-x-auto">
             <table className="w-full text-left text-[12px]">
               <thead className="bg-[#141414] text-white/25 font-mono text-[10px] tracking-widest border-b border-white/[0.06]">
                 <tr>
