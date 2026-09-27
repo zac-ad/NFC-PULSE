@@ -40,6 +40,7 @@ function ActivateContent() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [loginLinkSent, setLoginLinkSent] = useState<boolean | null>(null);
 
   // Sync cardCode if URL param arrives late (Suspense boundary)
   useEffect(() => {
@@ -146,6 +147,7 @@ function ActivateContent() {
       }
 
       // 3. Success state — show the check-your-email screen
+      setLoginLinkSent(true);
       setMessage({
         type: 'success',
         text: `Your card is active. We sent a sign-in link to ${email.trim().toLowerCase()} — click it to reach your dashboard.`,
@@ -250,7 +252,9 @@ function ActivateContent() {
           </div>
           <div className="space-y-3">
             <p className="font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">Card active</p>
-            <h1 className="font-serif text-2xl text-[#f2f0eb]">Check your email.</h1>
+            <h1 className="font-serif text-2xl text-[#f2f0eb]">
+              {loginLinkSent ? 'Check your email.' : 'Your card is active.'}
+            </h1>
             <p className="text-[14px] text-[#f2f0eb]/40 leading-relaxed max-w-xs mx-auto">
               {message.text}
             </p>
@@ -415,6 +419,7 @@ function ActivateContent() {
             <button
               type="submit"
               disabled={loading || !consent || !!slugError}
+              aria-busy={loading}
               className="w-full py-3.5 rounded-xl bg-[#f2f0eb] text-black text-[13px] font-semibold hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading ? 'Activating…' : 'Activate card'}
