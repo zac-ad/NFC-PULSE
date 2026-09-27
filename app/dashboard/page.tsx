@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
@@ -79,6 +79,8 @@ function DashboardContent() {
   const presetParam = (searchParams.get('preset')?.toUpperCase() as 'PROFESSIONAL' | 'PERSONAL') || 'PROFESSIONAL';
 
   const [loading, setLoading]             = useState(true);
+  const [switchingProfile, setSwitchingProfile] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -114,7 +116,15 @@ function DashboardContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // ── Load profiles via server API ─────────────────────────────
+  const selectionRequestRef = useRef(0);
+
   const selectProfileToEdit = async (prof: ProfileData) => {
+    const requestId = ++selectionRequestRef.current;
+    setSwitchingProfile(true);
+    setProfileLoadError(null);
+
+    // Update the identity fields immediately so the selected profile is clear
+    // while its private links and telemetry load.
     setCurrentProfileId(prof.id);
     setActiveTab(prof.profile_type);
     setFullName(prof.full_name || '');
@@ -128,61 +138,93 @@ function DashboardContent() {
     setBannerUrl(prof.banner_url || '');
     setIsActive(prof.is_active ?? true);
 
-    // Links — load through the authenticated server route so private QR media
-    // is returned as a short-lived signed URL.
-    const token = await getToken();
-    if (token) {
-      const linksRes = await fetch(`/api/links?profileId=${encodeURIComponent(prof.id)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const linksJson = await linksRes.json();
-      setItems(linksJson.links || []);
-    } else {
-      setItems([]);
-    }
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Your session expired. Please sign in again.');
 
-    // Card + telemetry — load through the authenticated server route.
-    const telemetryToken = await getToken();
-    if (telemetryToken) {
-      const telemetryRes = await fetch(
-        `/api/dashboard/telemetry?profileId=${encodeURIComponent(prof.id)}`,
-        { headers: { Authorization: `Bearer ${telemetryToken}` } }
-      );
-      const telemetryJson = await telemetryRes.json();
-      if (telemetryRes.ok) {
-        setAssignedCardCode(telemetryJson.card?.card_code || null);
-        setTapCount(telemetryJson.card?.tap_count || 0);
-        setRecentTaps(telemetryJson.taps || []);
-      } else {
-        setAssignedCardCode(null);
-        setTapCount(0);
-        setRecentTaps([]);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [linksRes, telemetryRes] = await Promise.all([
+        fetch(`/api/links?profileId=${encodeURIComponent(prof.id)}`, { headers }),
+        fetch(
+          `/api/dashboard/telemetry?profileId=${encodeURIComponent(prof.id)}`,
+          { headers }
+        ),
+      ]);
+
+      if (!linksRes.ok) {
+        const linksJson = await linksRes.json().catch(() => ({}));
+        throw new Error(linksJson.error || 'Could not load your links.');
       }
-    } else {
+
+      if (!telemetryRes.ok) {
+        const telemetryJson = await telemetryRes.json().catch(() => ({}));
+        throw new Error(telemetryJson.error || 'Could not load your card activity.');
+      }
+
+      const [linksJson, telemetryJson] = await Promise.all([
+        linksRes.json(),
+        telemetryRes.json(),
+      ]);
+
+      // Ignore a slower response from an older profile selection.
+      if (requestId !== selectionRequestRef.current) return;
+
+      setItems(linksJson.links || []);
+      setAssignedCardCode(telemetryJson.card?.card_code || null);
+      setTapCount(telemetryJson.card?.tap_count || 0);
+      setRecentTaps(telemetryJson.taps || []);
+    } catch (err: unknown) {
+      if (requestId !== selectionRequestRef.current) return;
+
+      const msg = err instanceof Error ? err.message : 'Could not load this profile.';
+      setItems([]);
       setAssignedCardCode(null);
       setTapCount(0);
       setRecentTaps([]);
+      setProfileLoadError(msg);
+    } finally {
+      if (requestId === selectionRequestRef.current) {
+        setSwitchingProfile(false);
+      }
     }
   };
 
   const loadProfiles = useCallback(async () => {
+    setProfileLoadError(null);
     const token = await getToken();
     if (!token) { setLoading(false); return; }
 
-    const res = await fetch('/api/profile', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    const json = await res.json();
+    try {
+      const res = await fetch('/api/profile', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const json = await res.json();
 
-    if (json.account) setUserAccount(json.account);
+      if (!res.ok) {
+        throw new Error(json.error || 'Could not load your profiles.');
+      }
 
-    const fetchedProfiles: ProfileData[] = json.profiles || [];
-    setProfiles(fetchedProfiles);
+      if (json.account) setUserAccount(json.account);
 
-    const target = fetchedProfiles.find(p => p.profile_type === presetParam) || fetchedProfiles[0];
-    if (target) await selectProfileToEdit(target);
+      const fetchedProfiles: ProfileData[] = json.profiles || [];
+      setProfiles(fetchedProfiles);
 
-    setLoading(false);
+      const target = fetchedProfiles.find(p => p.profile_type === presetParam) || fetchedProfiles[0];
+      if (target) {
+        await selectProfileToEdit(target);
+      } else {
+        setCurrentProfileId(null);
+        setItems([]);
+        setAssignedCardCode(null);
+        setTapCount(0);
+        setRecentTaps([]);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not load your profiles.';
+      setProfileLoadError(msg);
+    } finally {
+      setLoading(false);
+    }
   }, [presetParam]);
 
   useEffect(() => {
@@ -202,9 +244,31 @@ function DashboardContent() {
   }, []);
 
   const handleTabSwitch = async (type: 'PROFESSIONAL' | 'PERSONAL') => {
-    setActiveTab(type);
+    if (type === activeTab || switchingProfile) return;
+
     const existing = profiles.find(p => p.profile_type === type);
-    if (existing) { await selectProfileToEdit(existing); }
+    if (existing) {
+      await selectProfileToEdit(existing);
+    } else {
+      setActiveTab(type);
+      setCurrentProfileId(null);
+      setItems([]);
+      setAssignedCardCode(null);
+      setTapCount(0);
+      setRecentTaps([]);
+      setProfileLoadError(null);
+    }
+  };
+
+  const handleRetryProfileLoad = async () => {
+    const current = profiles.find(p => p.id === currentProfileId)
+      || profiles.find(p => p.profile_type === activeTab);
+
+    if (current) {
+      await selectProfileToEdit(current);
+    } else {
+      await loadProfiles();
+    }
   };
 
   // ── Private/Public toggle — via server API ───────────────────
@@ -405,6 +469,19 @@ function DashboardContent() {
           )}
         </div>
 
+        {profileLoadError && (
+          <div className="px-4 py-3 rounded-xl text-[13px] border border-red-900/50 bg-red-950/30 text-red-400 flex items-center justify-between gap-4">
+            <span>{profileLoadError}</span>
+            <button
+              type="button"
+              onClick={handleRetryProfileLoad}
+              className="shrink-0 text-[12px] text-white/70 hover:text-white underline underline-offset-4"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Message */}
         {message && (
           <div className={`px-4 py-3 rounded-xl text-[13px] border ${
@@ -440,7 +517,9 @@ function DashboardContent() {
                 <button
                   key={type}
                   onClick={() => handleTabSwitch(type)}
-                  className={`py-3 rounded-xl text-[13px] font-medium transition-all ${
+                  disabled={switchingProfile}
+                  aria-pressed={activeTab === type}
+                  className={`py-3 rounded-xl text-[13px] font-medium transition-all disabled:cursor-wait disabled:opacity-50 ${
                     activeTab === type ? 'bg-white text-black' : 'text-white/35 hover:text-white'
                   }`}
                 >
@@ -448,6 +527,12 @@ function DashboardContent() {
                 </button>
               ))}
             </div>
+
+            {switchingProfile && (
+              <p className="text-center text-[11px] font-mono text-white/25 tracking-widest">
+                Loading {activeTab === 'PROFESSIONAL' ? 'professional' : 'personal'} profile…
+              </p>
+            )}
 
             {/* Privacy toggle */}
             <div className="bg-[#141414] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between">
