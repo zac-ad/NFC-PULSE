@@ -145,7 +145,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     url: link.type === 'qr' ? await signedProfileMediaUrl(link.url, 3600) : link.url,
   })));
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     profile: {
       ...connectedProfile,
       phone: profile.phone || '',
@@ -154,4 +154,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     links: [...(publicLinks || []), ...connectedLinks],
     connected: true,
   });
+
+  // Connected responses contain private contact data and tap-only links.
+  // Prevent browsers, proxies, and CDNs from storing or replaying this
+  // session-authorized response to another viewer.
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  return response;
 }
