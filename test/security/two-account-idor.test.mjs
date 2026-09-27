@@ -81,7 +81,7 @@ test("dashboard telemetry reads use an authenticated server route with account o
   assert.match(route, /\.from\('profiles'\)\.select\('id'\)\.eq\('id', profileId\)\.eq\('account_id', account\.id\)/);
   assert.match(route, /\.from\('hardware_cards'\)\.select\('card_code, tap_count'\)/);
   assert.match(route, /\.from\('card_taps'\)/);
-  assert.match(route, /function noStoreJson\\(/);\n  assert.match(route, /Cache-Control', 'private, no-store, max-age=0'/);
+  assert.match(route, /function noStoreJson\(/);\n  assert.match(route, /Cache-Control', 'private, no-store, max-age=0'/);
 
   assert.match(dashboard, /\/api\/dashboard\/telemetry\?profileId=/);
   assert.doesNotMatch(dashboard, /\.from\('hardware_cards'\)/);
