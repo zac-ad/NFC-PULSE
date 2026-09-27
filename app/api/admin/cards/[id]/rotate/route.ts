@@ -5,6 +5,8 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 type RotationAction = 'prepare' | 'finalize' | 'discard';
 
+const LEGACY_CARD_CODE_PATTERN = /^CARD-[0-9]{2,4}$/;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -52,6 +54,20 @@ export async function POST(
       );
     }
 
+    if (card.status !== 'UNCLAIMED') {
+      return NextResponse.json(
+        { error: 'Legacy-code migration is limited to unclaimed cards. Active or deactivated cards require a coordinated physical migration.' },
+        { status: 409 }
+      );
+    }
+
+    if (!LEGACY_CARD_CODE_PATTERN.test(card.card_code)) {
+      return NextResponse.json(
+        { error: 'This card already uses a secure card code and does not need legacy migration.' },
+        { status: 409 }
+      );
+    }
+
     const replacementCode = generateCardCode();
 
     const { data: updated, error: updateError } = await supabaseAdmin
@@ -61,8 +77,10 @@ export async function POST(
         pending_card_code_created_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .eq('status', 'UNCLAIMED')
+      .eq('card_code', card.card_code)
       .is('pending_card_code', null)
-      .select('id, status, pending_card_code, pending_card_code_created_at')
+      .select('id, status, card_code, pending_card_code, pending_card_code_created_at')
       .maybeSingle();
 
     if (updateError) {
@@ -75,7 +93,7 @@ export async function POST(
 
     if (!updated) {
       return NextResponse.json(
-        { error: 'This card already has a pending replacement code. Finalize or discard that rotation first.' },
+        { error: 'Card state changed before migration could be prepared. No replacement code was created.' },
         { status: 409 }
       );
     }
@@ -83,7 +101,7 @@ export async function POST(
     await supabaseAdmin.from('admin_actions').insert({
       action: 'PREPARE_CARD_ROTATION',
       card_code: card.card_code,
-      detail: `Prepared replacement code for card ${card.id} (session: ${check.session.id}).`,
+      detail: `Prepared replacement code for legacy card ${card.id} (session: ${check.session.id}).`,
     });
 
     return NextResponse.json({
@@ -139,6 +157,13 @@ export async function POST(
     });
   }
 
+  if (card.status !== 'UNCLAIMED' || !LEGACY_CARD_CODE_PATTERN.test(card.card_code)) {
+    return NextResponse.json(
+      { error: 'Legacy-code finalization is limited to an unclaimed legacy card. No code was replaced.' },
+      { status: 409 }
+    );
+  }
+
   // The current code remains valid until this single update succeeds.
   // The unique card_code constraint prevents a live-credential collision.
   // No alias to the old code is retained after finalization.
@@ -150,6 +175,8 @@ export async function POST(
       pending_card_code_created_at: null,
     })
     .eq('id', id)
+    .eq('status', 'UNCLAIMED')
+    .eq('card_code', card.card_code)
     .eq('pending_card_code', card.pending_card_code)
     .select('id, card_code, status')
     .maybeSingle();
@@ -172,7 +199,7 @@ export async function POST(
   await supabaseAdmin.from('admin_actions').insert({
     action: 'FINALIZE_CARD_ROTATION',
     card_code: finalized.card_code,
-    detail: `Finalized card code rotation for card ${card.id}; previous code invalidated (session: ${check.session.id}).`,
+    detail: `Finalized card code rotation for legacy card ${card.id}; previous code invalidated (session: ${check.session.id}).`,
   });
 
   return NextResponse.json({
