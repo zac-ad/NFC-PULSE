@@ -198,6 +198,7 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
             onClick={handleShare}
             className="absolute top-3.5 right-3.5 z-20 w-9 h-9 bg-black/60 backdrop-blur-md border border-white/10 hover:border-white/30 rounded-full flex items-center justify-center text-white transition-all active:scale-90"
             title="Share Profile"
+            aria-label="Share profile"
           >
             {copied ? (
               <span className="text-[10px] font-bold text-emerald-400">✓</span>
@@ -328,15 +329,19 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
                 const isOpen = openQrId === qr.id;
                 return (
                   <div key={qr.id} className="bg-neutral-950/80 border border-neutral-800/80 rounded-2xl overflow-hidden transition-all shadow-sm backdrop-blur-md">
-                    <button onClick={() => setOpenQrId(isOpen ? null : qr.id)}
-                      className="w-full flex items-center justify-between p-3.5 text-left text-sm font-semibold text-neutral-200 hover:bg-neutral-900/80 transition-colors">
+                    <button
+                      onClick={() => setOpenQrId(isOpen ? null : qr.id)}
+                      aria-expanded={isOpen}
+                      aria-controls={`pulse-qr-${qr.id}`}
+                      className="w-full flex items-center justify-between p-3.5 text-left text-sm font-semibold text-neutral-200 hover:bg-neutral-900/80 transition-colors"
+                    >
                       <span>{qr.title}</span>
                       <svg className={`w-4 h-4 text-neutral-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
                     {isOpen && (
-                      <div className="p-4 border-t border-neutral-900 bg-neutral-900/40 flex flex-col items-center gap-2">
+                      <div id={`pulse-qr-${qr.id}`} className="p-4 border-t border-neutral-900 bg-neutral-900/40 flex flex-col items-center gap-2">
                         <img src={qr.url} alt={qr.title} className="w-48 h-48 object-cover rounded-xl bg-white p-2 shadow-2xl" />
                         <p className="text-xs text-neutral-400 font-medium">{qr.title}</p>
                       </div>
@@ -475,7 +480,7 @@ function PublicProfilePageInner() {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4" aria-busy="true" aria-label="Loading PULSE profile">
         <div className="w-full max-w-md bg-neutral-950 border border-neutral-800/60 rounded-3xl p-6 space-y-6">
           <div className="w-full h-[140px] bg-neutral-900 rounded-2xl animate-pulse" />
           <div className="flex justify-center -mt-14">
