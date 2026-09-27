@@ -40,10 +40,17 @@ test("viewer sessions use a hashed 32-byte token and are bound to an active card
   assert.match(vcard, /card\.status !== 'ACTIVE' \|\| card\.profile_id !== profile\.id/);
 });
 
+test("viewer-session responses are explicitly non-cacheable", () => {
+  const source = read("app/api/viewer-session/route.ts");
+  assert.match(source, /function noStoreJson\(/);
+  assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
+  assert.doesNotMatch(source, /return NextResponse\.json\(/);
+});
+
 test("vCard rejects requests without a valid viewer session", () => {
   const source = read("app/api/vcard/[slug]/route.ts");
   assert.match(source, /return NextResponse\.json\(\{ error: 'A PULSE connection is required\.' \}, \{ status: 403 \}\)/);
-  assert.match(source, /'Cache-Control': 'private, no-store'/);
+  assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
 });
 
 test("activation is rate-limited before the database operation", () => {
