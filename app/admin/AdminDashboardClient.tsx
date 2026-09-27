@@ -477,7 +477,7 @@ export default function AdminDashboardClient() {
                           <button
                             onClick={() => handleRotate(card, 'prepare')}
                             disabled={working}
-                            title="Generates a replacement code without invalidating the current code."
+                            title="Generates a replacement code without invalidating the current code. Active cards remain live until finalization."
                             className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/50 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
                           >
                             Prepare rotation
