@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
+function noStoreJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  return response;
+}
+
 async function getUserEmail(request: Request): Promise<string | null> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -21,12 +27,12 @@ async function getUserEmail(request: Request): Promise<string | null> {
 export async function GET(request: Request) {
   const userEmail = await getUserEmail(request);
   if (!userEmail) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return noStoreJson({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const profileId = new URL(request.url).searchParams.get('profileId')?.trim();
   if (!profileId) {
-    return NextResponse.json({ error: 'profileId required' }, { status: 400 });
+    return noStoreJson({ error: 'profileId required' }, { status: 400 });
   }
 
   const { data: account, error: accountError } = await supabaseAdmin
@@ -36,10 +42,10 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (accountError) {
-    return NextResponse.json({ error: 'Account lookup failed' }, { status: 500 });
+    return noStoreJson({ error: 'Account lookup failed' }, { status: 500 });
   }
   if (!account) {
-    return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+    return noStoreJson({ error: 'Account not found' }, { status: 404 });
   }
 
   const { data: profile, error: profileError } = await supabaseAdmin
@@ -50,10 +56,10 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (profileError) {
-    return NextResponse.json({ error: 'Profile lookup failed' }, { status: 500 });
+    return noStoreJson({ error: 'Profile lookup failed' }, { status: 500 });
   }
   if (!profile) {
-    return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    return noStoreJson({ error: 'Profile not found' }, { status: 404 });
   }
 
   const [{ data: card, error: cardError }, { data: taps, error: tapsError }] = await Promise.all([
@@ -71,13 +77,11 @@ export async function GET(request: Request) {
   ]);
 
   if (cardError || tapsError) {
-    return NextResponse.json({ error: 'Telemetry lookup failed' }, { status: 500 });
+    return noStoreJson({ error: 'Telemetry lookup failed' }, { status: 500 });
   }
 
-  const response = NextResponse.json({
+  return noStoreJson({
     card: card || null,
     taps: taps || [],
   });
-  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
-  return response;
 }
