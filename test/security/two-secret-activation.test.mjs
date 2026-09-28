@@ -53,3 +53,12 @@ test("activation UI collects the secret separately from the public card code", (
   assert.match(source, /activationSecret/);
   assert.match(source, /activationSecret:/);
 });
+
+test("card release generates and stores a fresh activation secret", () => {
+  const source = read("app/api/admin/cards/route.ts");
+  const release = source.slice(source.indexOf("if (action === 'release')"));
+  assert.match(release, /const activationSecret = generateActivationSecret\(\)/);
+  assert.match(release, /activation_secret_hash: hashActivationSecret\(activationSecret\)/);
+  assert.match(release, /activation_secret_issued_at/);
+  assert.match(release, /activationSecret/);
+});
