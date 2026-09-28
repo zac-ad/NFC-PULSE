@@ -10,8 +10,8 @@ test("performance migration preserves authorization while optimizing RLS evaluat
   assert.match(source, /using \(\(select auth\.uid\(\)\) = id\)/);
   assert.match(source, /with check \(account_id = \(select auth\.uid\(\)\)\)/);
   assert.match(source, /profiles\.account_id = \(select auth\.uid\(\)\)/);
-  assert.doesNotMatch(source, /using \(auth\.uid\(\)/);
-  assert.doesNotMatch(source, /=\\s*auth\.uid\(\)/);\n  assert.doesNotMatch(source, /auth\.uid\(\)\\s*=/);
+  assert.doesNotMatch(source, /=\s*auth\.uid\(\)/);
+  assert.doesNotMatch(source, /auth\.uid\(\)\s*=/);
 
   assert.match(source, /idx_hardware_cards_profile_id/);
   assert.match(source, /idx_profiles_account_id/);
