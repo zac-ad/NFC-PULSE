@@ -75,7 +75,7 @@ test("public media cannot be returned from the private bucket without a signed U
 });
 
 test("least-privilege migration removes browser write privileges", () => {
-  const migration = read("supabase/migrations/20260924220000_least_privilege_grants.sql");
+  const migration = read("supabase/migrations/20260924022007_least_privilege_grants.sql");
   assert.match(migration, /revoke all privileges on table public\.accounts from anon, authenticated/);
   assert.match(migration, /revoke all privileges on table public\.profiles from anon, authenticated/);
   assert.match(migration, /grant select on table public\.profiles to anon, authenticated/);
