@@ -27,3 +27,12 @@ test("profile link SELECT remains public while write policies are separated", ()
   assert.match(source, /"Users can delete own links"/);
   assert.doesNotMatch(source, /create policy "Users can manage own links"[\s\S]*for all/);
 });
+
+
+test("redundant profile slug index cleanup preserves the unique slug index", () => {
+  const source = read("supabase/migrations/20260928130000_remove_redundant_profiles_slug_index.sql");
+
+  assert.match(source, /drop index if exists public\.idx_profiles_slug/);
+  assert.match(source, /profiles_slug_key/);
+  assert.doesNotMatch(source, /drop constraint/i);
+});
