@@ -42,6 +42,7 @@ export default function AdminDashboardClient() {
   const [confirm, setConfirm] = useState<ConfirmModal | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [working, setWorking] = useState(false);
+  const [activationCredential, setActivationCredential] = useState<{ cardCode: string; secret: string } | null>(null);
 
   const fetchCards = async () => {
     setLoading(true);
@@ -130,6 +131,28 @@ export default function AdminDashboardClient() {
     setWorking(false);
   };
 
+  const handleIssueActivationSecret = async (card: HardwareCard) => {
+    if (working) return;
+    if (!window.confirm(`Issue a new activation secret for ${card.card_code}? Any previous activation secret for this unclaimed card will stop working.`)) {
+      return;
+    }
+    setWorking(true);
+    setMessage(null);
+    const res = await adminFetch(`/api/admin/cards/${card.id}/rotate`, 'POST', { action: 'issue_activation_secret' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showMessage('error', body.error || 'Could not issue activation secret.');
+    } else if (body.activationSecret) {
+      setActivationCredential({ cardCode: card.card_code, secret: body.activationSecret });
+      showMessage('success', 'New activation secret issued. Copy it now; PULSE will not display it again.');
+      fetchCards();
+      fetchActions();
+    } else {
+      showMessage('error', 'Activation secret was issued but was not returned. Do not proceed until a new secret is visible.');
+    }
+    setWorking(false);
+  };
+
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (working) return;
@@ -141,6 +164,9 @@ export default function AdminDashboardClient() {
       showMessage('error', body.error || 'Failed to register card.');
     } else {
       showMessage('success', `Card ${body.card?.card_code || 'generated card'} registered.`);
+      if (body.activationSecret && body.card?.card_code) {
+        setActivationCredential({ cardCode: body.card.card_code, secret: body.activationSecret });
+      }
       fetchCards();
       fetchActions();
     }
@@ -175,6 +201,9 @@ export default function AdminDashboardClient() {
       if (!res.ok) {
         showMessage('error', body.error || 'Action failed.');
       } else {
+        if (type === 'release' && body.activationSecret) {
+          setActivationCredential({ cardCode: card.card_code, secret: body.activationSecret });
+        }
         const msg =
           type === 'disable' ? `${card.card_code} disabled.` :
           type === 'enable'  ? `${card.card_code} enabled.` :
@@ -252,6 +281,38 @@ export default function AdminDashboardClient() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-[#f2f0eb] font-sans">
+
+      {/* One-time activation credential modal */}
+      {activationCredential && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
+          <div className="bg-[#141414] border border-white/10 rounded-2xl p-7 max-w-md w-full space-y-5">
+            <div>
+              <p className="font-mono text-[10px] text-white/25 tracking-widest mb-2 uppercase">One-time credential</p>
+              <h2 className="font-serif text-xl text-white">Activation secret for {activationCredential.cardCode}</h2>
+              <p className="text-[13px] text-white/40 mt-2 leading-relaxed">
+                Give this secret to the card owner through a trusted handoff. It is never stored in plaintext and will not be shown again after this window is closed.
+              </p>
+            </div>
+            <div className="bg-black/40 border border-white/[0.08] rounded-xl p-4 font-mono text-[13px] text-white break-all select-all">
+              {activationCredential.secret}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigator.clipboard?.writeText(activationCredential.secret)}
+                className="flex-1 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb]"
+              >
+                Copy secret
+              </button>
+              <button
+                onClick={() => setActivationCredential(null)}
+                className="flex-1 py-3 rounded-xl border border-white/[0.08] text-white/60 text-[13px] hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm modal */}
       {confirm && (
@@ -437,6 +498,16 @@ export default function AdminDashboardClient() {
                     <td className="px-5 py-4 text-white/40 font-mono">{card.tap_count || 0}</td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex gap-2 justify-end">
+                        {card.status === 'UNCLAIMED' && (
+                          <button
+                            onClick={() => handleIssueActivationSecret(card)}
+                            disabled={working}
+                            title="Issue the separate credential required to activate this card."
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/60 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
+                          >
+                            Issue activation secret
+                          </button>
+                        )}
                         {card.status === 'ACTIVE' && (
                           <>
                             <button onClick={() => openRelease(card)}
