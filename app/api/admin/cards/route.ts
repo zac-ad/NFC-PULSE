@@ -106,9 +106,15 @@ export async function PATCH(request: Request) {
   }
 
   if (action === 'release') {
+    const activationSecret = generateActivationSecret();
     const { error } = await supabaseAdmin
       .from('hardware_cards')
-      .update({ status: 'UNCLAIMED', profile_id: null })
+      .update({
+        status: 'UNCLAIMED',
+        profile_id: null,
+        activation_secret_hash: hashActivationSecret(activationSecret),
+        activation_secret_issued_at: new Date().toISOString(),
+      })
       .eq('id', card_id);
     if (error) return NextResponse.json({ error: 'Could not release card.' }, { status: 500 });
     await supabaseAdmin.from('admin_actions').insert({
