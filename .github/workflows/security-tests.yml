@@ -32,7 +32,7 @@ jobs:
         run: node --test test/**/*.test.mjs
 
       - name: Run production build
-        run: npm run build 2>&1 | tee build.log
+        run: set -o pipefail; npm run build 2>&1 | tee build.log
         shell: bash
 
       - name: Upload build log
