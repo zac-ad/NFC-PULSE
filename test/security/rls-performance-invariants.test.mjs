@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
 test("performance migration preserves authorization while optimizing RLS evaluation", () => {
-  const source = read("supabase/migrations/20260928183000_rls_and_foreign_key_performance.sql");
+  const source = read("supabase/migrations/20260928102249_rls_and_foreign_key_performance.sql");
 
   assert.match(source, /using \(\(select auth\.uid\(\)\) = id\)/);
   assert.match(source, /with check \(account_id = \(select auth\.uid\(\)\)\)/);
@@ -19,7 +19,7 @@ test("performance migration preserves authorization while optimizing RLS evaluat
 });
 
 test("profile link SELECT remains public while write policies are separated", () => {
-  const source = read("supabase/migrations/20260928183000_rls_and_foreign_key_performance.sql");
+  const source = read("supabase/migrations/20260928102249_rls_and_foreign_key_performance.sql");
 
   assert.match(source, /drop policy if exists "Users can manage own links"/);
   assert.match(source, /for insert/);
