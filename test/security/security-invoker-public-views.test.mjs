@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
 test("public projection views use caller RLS and only receive public base columns", () => {
-  const migration = read("supabase/migrations/20260928133000_security_invoker_public_views.sql");
+  const migration = read("supabase/migrations/20260928123151_security_invoker_public_views.sql");
 
   assert.match(migration, /create or replace view public\.public_profiles[\\s\\S]*security_invoker = true/);
   assert.match(migration, /create or replace view public\.public_profile_links[\\s\\S]*security_invoker = true/);
@@ -16,7 +16,7 @@ test("public projection views use caller RLS and only receive public base column
 });
 
 test("public views remain read-only for browser roles", () => {
-  const migration = read("supabase/migrations/20260928133000_security_invoker_public_views.sql");
+  const migration = read("supabase/migrations/20260928123151_security_invoker_public_views.sql");
 
   assert.match(migration, /revoke all privileges on table public\.public_profiles from public, anon, authenticated/);
   assert.match(migration, /revoke all privileges on table public\.public_profile_links from public, anon, authenticated/);
