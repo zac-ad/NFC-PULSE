@@ -32,4 +32,12 @@ jobs:
         run: node --test test/**/*.test.mjs
 
       - name: Run production build
-        run: npm run build
+        run: npm run build 2>&1 | tee build.log
+        shell: bash
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-build-log
+          path: build.log
