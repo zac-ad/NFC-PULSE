@@ -71,7 +71,7 @@ export async function PATCH(request: Request) {
 
   const { data: card } = await supabaseAdmin
     .from('hardware_cards')
-    .select('id, card_code, status, profile_id, activation_secret_hash')
+    .select('id, card_code, status, profile_id')
     .eq('id', card_id)
     .maybeSingle();
 
