@@ -32,6 +32,7 @@ function ActivateContent() {
   );
 
   const [cardCode, setCardCode] = useState(codeFromUrl);
+  const [activationSecret, setActivationSecret] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [slug, setSlug] = useState('');
@@ -80,7 +81,7 @@ function ActivateContent() {
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!cardCode || !email || !slug || !fullName || !profileType) {
+    if (!cardCode || !activationSecret || !email || !slug || !fullName || !profileType) {
       setMessage({ type: 'error', text: 'Please fill in all fields.' });
       return;
     }
@@ -107,6 +108,7 @@ function ActivateContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cardCode: cardCode.trim().toUpperCase(),
+          activationSecret: activationSecret.trim(),
           fullName: fullName.trim(),
           email: email.trim().toLowerCase(),
           slug: slug.trim(),
@@ -328,6 +330,27 @@ function ActivateContent() {
                   className="w-full bg-[#141414] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-[#f2f0eb] font-mono placeholder:text-white/20 focus:outline-none focus:border-white/20"
                 />
               )}
+            </div>
+
+            {/* Activation secret */}
+            <div className="space-y-1.5">
+              <label htmlFor="activation-secret" className="block font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">
+                Activation secret
+              </label>
+              <input
+                id="activation-secret"
+                type="password"
+                value={activationSecret}
+                onChange={e => setActivationSecret(e.target.value)}
+                placeholder="Enter the secret provided with your card"
+                required
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full bg-[#141414] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-[#f2f0eb] font-mono placeholder:text-white/20 focus:outline-none focus:border-white/20"
+              />
+              <p className="text-[11px] text-[#f2f0eb]/25">
+                This is separate from the card code. Never publish it in the NFC URL.
+              </p>
             </div>
 
             {/* Full name */}

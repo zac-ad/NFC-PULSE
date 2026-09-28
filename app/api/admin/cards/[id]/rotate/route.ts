@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { generateCardCode } from '@/lib/cardCode';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { generateActivationSecret, hashActivationSecret } from '@/lib/activationSecret';
 
-type RotationAction = 'prepare' | 'finalize' | 'discard';
+type RotationAction = 'prepare' | 'finalize' | 'discard' | 'issue_activation_secret';
 
 const LEGACY_CARD_CODE_PATTERN = /^CARD-[0-9]{2,4}$/;
 
@@ -27,13 +28,13 @@ export async function POST(
     return NextResponse.json({ error: 'A valid action is required.' }, { status: 400 });
   }
 
-  if (action !== 'prepare' && action !== 'finalize' && action !== 'discard') {
+  if (action !== 'prepare' && action !== 'finalize' && action !== 'discard' && action !== 'issue_activation_secret') {
     return NextResponse.json({ error: 'Action must be prepare, finalize, or discard.' }, { status: 400 });
   }
 
   const { data: card, error: lookupError } = await supabaseAdmin
     .from('hardware_cards')
-    .select('id, card_code, status, pending_card_code, pending_card_code_created_at')
+    .select('id, card_code, status, pending_card_code, pending_card_code_created_at, activation_secret_hash')
     .eq('id', id)
     .maybeSingle();
 
@@ -46,6 +47,43 @@ export async function POST(
     return NextResponse.json({ error: 'Card not found.' }, { status: 404 });
   }
 
+  if (action === 'issue_activation_secret') {
+    if (card.status !== 'UNCLAIMED') {
+      return NextResponse.json({ error: 'Activation secrets can only be issued to unclaimed cards.' }, { status: 409 });
+    }
+    const activationSecret = generateActivationSecret();
+    const { data: issued, error: issueError } = await supabaseAdmin
+      .from('hardware_cards')
+      .update({
+        activation_secret_hash: hashActivationSecret(activationSecret),
+        activation_secret_issued_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('status', 'UNCLAIMED')
+      .select('id, card_code, status')
+      .maybeSingle();
+
+    if (issueError) {
+      console.error('[admin/cards/rotate issue activation secret]', issueError.message);
+      return NextResponse.json({ error: 'Could not issue activation secret.' }, { status: 500 });
+    }
+    if (!issued) {
+      return NextResponse.json({ error: 'Card state changed before the activation secret was issued.' }, { status: 409 });
+    }
+
+    await supabaseAdmin.from('admin_actions').insert({
+      action: 'ISSUE_ACTIVATION_SECRET',
+      card_code: card.card_code,
+      detail: 'Issued new activation secret for unclaimed card ' + card.id + ' (session: ' + check.session.id + ').',
+    });
+
+    return NextResponse.json({
+      success: true,
+      action: 'issue_activation_secret',
+      card: issued,
+      activationSecret,
+    });
+  }
   if (action === 'prepare') {
     if (card.pending_card_code) {
       return NextResponse.json(

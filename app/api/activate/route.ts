@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { hashActivationSecret } from '@/lib/activationSecret';
 
 export async function POST(request: Request) {
 
@@ -39,10 +40,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  const { cardCode, fullName, email, slug, profileType, consent } = body;
+  const { cardCode, activationSecret, fullName, email, slug, profileType, consent } = body;
 
   // Basic presence checks before hitting the database
-  if (!cardCode || !fullName || !email || !slug || !profileType) {
+  if (!cardCode || !activationSecret || !fullName || !email || !slug || !profileType) {
     return NextResponse.json({ error: 'Please fill in all fields.' }, { status: 400 });
   }
   if (!consent) {
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
   // The function also validates, but doing it here means we catch
   // obvious bad input without a round-trip to the database.
   const cleanCode  = String(cardCode).trim().toUpperCase();
+  const cleanSecret = String(activationSecret).trim();
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanName  = String(fullName).trim();
   const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
@@ -81,6 +83,7 @@ export async function POST(request: Request) {
   // case where the RPC call itself fails (network, Supabase outage).
   const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card', {
     p_card_code:    cleanCode,
+    p_activation_secret_hash: hashActivationSecret(cleanSecret),
     p_email:        cleanEmail,
     p_full_name:    cleanName,
     p_slug:         cleanSlug,
@@ -103,6 +106,7 @@ export async function POST(request: Request) {
     // Determine the right HTTP status from the error content.
     const status =
       result.error.includes('already been activated') ? 409 :
+      result.error.includes('activation secret') ? 403 :
       result.error.includes('PULSE link is already taken') ? 409 :
       result.error.includes('couldn\'t find that card') ? 404 :
       result.error.includes('being activated right now') ? 409 :
