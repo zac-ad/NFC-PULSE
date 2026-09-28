@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { generateCardCode } from '@/lib/cardCode';
+import { generateActivationSecret, hashActivationSecret } from '@/lib/activationSecret';
 
 export async function GET(request: Request) {
   const check = await requireAdmin(request, { skipOriginCheck: true });
@@ -29,10 +30,16 @@ export async function POST(request: Request) {
   // Card codes are credentials. They must be generated server-side with
   // cryptographically secure randomness; callers cannot choose or predict them.
   const code = generateCardCode();
+  const activationSecret = generateActivationSecret();
 
   const { data, error } = await supabaseAdmin
     .from('hardware_cards')
-    .insert({ card_code: code, status: 'UNCLAIMED' })
+    .insert({
+      card_code: code,
+      status: 'UNCLAIMED',
+      activation_secret_hash: hashActivationSecret(activationSecret),
+      activation_secret_issued_at: new Date().toISOString(),
+    })
     .select('id, card_code')
     .single();
 
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
     detail: `Registered via admin panel (session: ${check.session.id})`,
   });
 
-  return NextResponse.json({ success: true, card: data });
+  return NextResponse.json({ success: true, card: data, activationSecret });
 }
 
 export async function PATCH(request: Request) {
@@ -64,7 +71,7 @@ export async function PATCH(request: Request) {
 
   const { data: card } = await supabaseAdmin
     .from('hardware_cards')
-    .select('id, card_code, status, profile_id')
+    .select('id, card_code, status, profile_id, activation_secret_hash')
     .eq('id', card_id)
     .maybeSingle();
 
@@ -109,7 +116,7 @@ export async function PATCH(request: Request) {
       card_code: card.card_code,
       detail: `Released by admin session ${check.session.id}`,
     });
-    return NextResponse.json({ success: true, status: 'UNCLAIMED' });
+    return NextResponse.json({ success: true, status: 'UNCLAIMED', activationSecret });
   }
 
   return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
