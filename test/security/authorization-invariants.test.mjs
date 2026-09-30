@@ -44,6 +44,8 @@ test("viewer-session responses are explicitly non-cacheable", () => {
   const source = read("app/api/viewer-session/route.ts");
   assert.match(source, /function noStoreJson\(/);
   assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
+  assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)/);
+  assert.match(source, /filename=\\"\$\{safeFilename\}\.vcf\\"/);
   assert.doesNotMatch(source, /return NextResponse\.json\(/);
 
   const directJsonResponses = source.match(/const response = NextResponse\.json\(/g) || [];
