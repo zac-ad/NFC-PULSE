@@ -3,8 +3,9 @@ import { generateCardCode } from '@/lib/cardCode';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { generateActivationSecret, hashActivationSecret } from '@/lib/activationSecret';
+import { generateNfcPassword } from '@/lib/nfcPassword';
 
-type RotationAction = 'prepare' | 'finalize' | 'discard' | 'issue_activation_secret';
+type RotationAction = 'prepare' | 'finalize' | 'discard' | 'issue_activation_secret' | 'issue_nfc_password' | 'get_nfc_password' | 'mark_nfc_protected' | 'mark_nfc_unprotected';
 
 const LEGACY_CARD_CODE_PATTERN = /^CARD-[0-9]{2,4}$/;
 
@@ -28,7 +29,7 @@ export async function POST(
     return NextResponse.json({ error: 'A valid action is required.' }, { status: 400 });
   }
 
-  if (action !== 'prepare' && action !== 'finalize' && action !== 'discard' && action !== 'issue_activation_secret') {
+  if (action !== 'prepare' && action !== 'finalize' && action !== 'discard' && action !== 'issue_activation_secret' && action !== 'issue_nfc_password' && action !== 'get_nfc_password' && action !== 'mark_nfc_protected' && action !== 'mark_nfc_unprotected') {
     return NextResponse.json({ error: 'Action must be prepare, finalize, or discard.' }, { status: 400 });
   }
 
@@ -45,6 +46,83 @@ export async function POST(
 
   if (!card) {
     return NextResponse.json({ error: 'Card not found.' }, { status: 404 });
+  }
+
+  if (action === 'issue_nfc_password' || action === 'get_nfc_password' || action === 'mark_nfc_protected' || action === 'mark_nfc_unprotected') {
+    if (card.status !== 'UNCLAIMED' && card.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'NFC protection can only be managed for active or unclaimed cards.' }, { status: 409 });
+    }
+
+    if (action === 'issue_nfc_password') {
+      const nfcPassword = generateNfcPassword();
+      const { data: secretId, error: issueError } = await supabaseAdmin.rpc('store_nfc_password', {
+        p_card_id: id,
+        p_password: nfcPassword,
+      });
+      if (issueError) {
+        console.error('[admin/cards/rotate issue NFC password]', issueError.message);
+        return NextResponse.json({ error: 'Could not issue NFC password.' }, { status: 500 });
+      }
+
+      await supabaseAdmin.from('admin_actions').insert({
+        action: 'ISSUE_NFC_PASSWORD',
+        card_code: card.card_code,
+        detail: 'Issued per-card NTAG21x password (session: ' + check.session.id + ').',
+      });
+
+      return NextResponse.json({
+        success: true,
+        action: 'issue_nfc_password',
+        card: { id: card.id, card_code: card.card_code, nfcProtectionStatus: 'PASSWORD_ISSUED' },
+        nfcPassword,
+        secretId,
+      });
+    }
+
+    if (action === 'get_nfc_password') {
+      const { data: nfcPassword, error: getError } = await supabaseAdmin.rpc('get_nfc_password', {
+        p_card_id: id,
+      });
+      if (getError) {
+        console.error('[admin/cards/rotate get NFC password]', getError.message);
+        return NextResponse.json({ error: 'Could not retrieve NFC password.' }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: 'get_nfc_password',
+        nfcPassword,
+      });
+    }
+
+    const nextProtectionStatus = action === 'mark_nfc_protected' ? 'PROTECTED' : 'UNPROTECTED';
+    const { data: updatedNfc, error: statusError } = await supabaseAdmin
+      .from('hardware_cards')
+      .update({
+        nfc_protection_status: nextProtectionStatus,
+        nfc_protected_at: nextProtectionStatus === 'PROTECTED' ? new Date().toISOString() : null,
+      })
+      .eq('id', id)
+      .in('status', ['UNCLAIMED', 'ACTIVE'])
+      .select('id, card_code, status, nfc_protection_status, nfc_protected_at')
+      .maybeSingle();
+
+    if (statusError || !updatedNfc) {
+      console.error('[admin/cards/rotate NFC protection status]', statusError?.message);
+      return NextResponse.json({ error: 'Could not update NFC protection status.' }, { status: 409 });
+    }
+
+    await supabaseAdmin.from('admin_actions').insert({
+      action: action === 'mark_nfc_protected' ? 'MARK_NFC_PROTECTED' : 'MARK_NFC_UNPROTECTED',
+      card_code: card.card_code,
+      detail: 'Updated NTAG21x physical protection status (session: ' + check.session.id + ').',
+    });
+
+    return NextResponse.json({
+      success: true,
+      action,
+      card: updatedNfc,
+    });
   }
 
   if (action === 'issue_activation_secret') {

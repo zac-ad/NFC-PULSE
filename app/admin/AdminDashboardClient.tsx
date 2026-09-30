@@ -12,6 +12,9 @@ interface HardwareCard {
   pending_card_code: string | null;
   pending_card_code_created_at: string | null;
   profiles?: { full_name?: string; email?: string; slug?: string; account_id?: string } | null;
+  nfc_protection_status?: 'UNPROTECTED' | 'PASSWORD_ISSUED' | 'PROTECTED';
+  nfc_password_issued_at?: string | null;
+  nfc_protected_at?: string | null;
 }
 
 interface ConfirmModal {
@@ -43,6 +46,7 @@ export default function AdminDashboardClient() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [working, setWorking] = useState(false);
   const [activationCredential, setActivationCredential] = useState<{ cardCode: string; secret: string } | null>(null);
+  const [nfcCredential, setNfcCredential] = useState<{ cardCode: string; password: string } | null>(null);
 
   const fetchCards = async () => {
     setLoading(true);
@@ -150,6 +154,60 @@ export default function AdminDashboardClient() {
     } else {
       showMessage('error', 'Activation secret was issued but was not returned. Do not proceed until a new secret is visible.');
     }
+    setWorking(false);
+  };
+
+  const handleNfcAction = async (
+    card: HardwareCard,
+    action: 'issue_nfc_password' | 'get_nfc_password' | 'mark_nfc_protected' | 'mark_nfc_unprotected'
+  ) => {
+    if (working) return;
+
+    if (action === 'mark_nfc_protected') {
+      if (!window.confirm(
+        'Only mark this card PROTECTED after NFC Tools confirms password protection is enabled and an unauthenticated write has failed.'
+      )) return;
+    }
+
+    if (action === 'mark_nfc_unprotected') {
+      if (!window.confirm(
+        'Only mark this card UNPROTECTED after the password has actually been removed from the physical NTAG215.'
+      )) return;
+    }
+
+    setWorking(true);
+    setMessage(null);
+
+    const res = await adminFetch(`/api/admin/cards/${card.id}/rotate`, 'POST', { action });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      showMessage('error', body.error || 'NFC protection action failed.');
+    } else if (action === 'issue_nfc_password' || action === 'get_nfc_password') {
+      if (body.nfcPassword) {
+        setNfcCredential({ cardCode: card.card_code, password: body.nfcPassword });
+        showMessage(
+          'success',
+          action === 'issue_nfc_password'
+            ? 'NFC password issued. Use NFC Tools Hex Password mode to protect this physical NTAG215.'
+            : 'NFC password retrieved. Handle it as a physical-card credential.'
+        );
+        fetchCards();
+        fetchActions();
+      } else {
+        showMessage('error', 'NFC password was not returned. Do not proceed.');
+      }
+    } else {
+      showMessage(
+        'success',
+        action === 'mark_nfc_protected'
+          ? 'Card marked physically protected.'
+          : 'Card marked physically unprotected.'
+      );
+      fetchCards();
+      fetchActions();
+    }
+
     setWorking(false);
   };
 
@@ -314,6 +372,38 @@ export default function AdminDashboardClient() {
         </div>
       )}
 
+      {/* One-time/retrieved NFC credential modal */}
+      {nfcCredential && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
+          <div className="bg-[#141414] border border-white/10 rounded-2xl p-7 max-w-md w-full space-y-5">
+            <div>
+              <p className="font-mono text-[10px] text-white/25 tracking-widest mb-2 uppercase">Physical card credential</p>
+              <h2 className="font-serif text-xl text-white">NFC password for {nfcCredential.cardCode}</h2>
+              <p className="text-[13px] text-white/40 mt-2 leading-relaxed">
+                This is the 4-byte NTAG21x password. In NFC Tools, use the Hex Password option so these 4 raw bytes are written to the tag. Never put this password in the public NFC URL.
+              </p>
+            </div>
+            <div className="bg-black/40 border border-white/[0.08] rounded-xl p-4 font-mono text-[15px] tracking-[0.2em] text-white break-all select-all">
+              {nfcCredential.password}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigator.clipboard?.writeText(nfcCredential.password)}
+                className="flex-1 py-3 rounded-xl bg-white text-black text-[13px] font-semibold hover:bg-[#f2f0eb]"
+              >
+                Copy password
+              </button>
+              <button
+                onClick={() => setNfcCredential(null)}
+                className="flex-1 py-3 rounded-xl border border-white/[0.08] text-white/60 text-[13px] hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirm modal */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6">
@@ -466,6 +556,11 @@ export default function AdminDashboardClient() {
                   <tr key={card.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-5 py-4 font-mono font-bold text-white">
                       <div>{card.card_code}</div>
+                      {card.nfc_protection_status && (
+                        <div className="mt-1 text-[10px] font-normal text-white/25">
+                          NFC: {card.nfc_protection_status}
+                        </div>
+                      )}
                       {card.pending_card_code && (
                         <div className="mt-1 text-[10px] font-normal text-amber-300/70">
                           Pending: {card.pending_card_code}
@@ -507,6 +602,56 @@ export default function AdminDashboardClient() {
                           >
                             Issue activation secret
                           </button>
+                        )}
+                        {(card.status === 'UNCLAIMED' || card.status === 'ACTIVE') && (
+                          <>
+                            {card.nfc_protection_status === 'UNPROTECTED' && (
+                              <button
+                                onClick={() => handleNfcAction(card, 'issue_nfc_password')}
+                                disabled={working}
+                                title="Generate a unique NTAG21x password for this physical card."
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/60 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
+                              >
+                                Issue NFC password
+                              </button>
+                            )}
+                            {card.nfc_protection_status === 'PASSWORD_ISSUED' && (
+                              <>
+                                <button
+                                  onClick={() => handleNfcAction(card, 'get_nfc_password')}
+                                  disabled={working}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/60 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
+                                >
+                                  Show NFC password
+                                </button>
+                                <button
+                                  onClick={() => handleNfcAction(card, 'mark_nfc_protected')}
+                                  disabled={working}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/60 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
+                                >
+                                  Mark protected
+                                </button>
+                              </>
+                            )}
+                            {card.nfc_protection_status === 'PROTECTED' && (
+                              <>
+                                <button
+                                  onClick={() => handleNfcAction(card, 'get_nfc_password')}
+                                  disabled={working}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 text-white/60 hover:bg-white/10 border border-white/[0.06] transition-colors disabled:opacity-50"
+                                >
+                                  Show NFC password
+                                </button>
+                                <button
+                                  onClick={() => handleNfcAction(card, 'mark_nfc_unprotected')}
+                                  disabled={working}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-amber-950/30 text-amber-400/80 hover:bg-amber-950/60 border border-amber-900/30 transition-colors disabled:opacity-50"
+                                >
+                                  Mark unprotected
+                                </button>
+                              </>
+                            )}
+                          </>
                         )}
                         {card.status === 'ACTIVE' && (
                           <>
