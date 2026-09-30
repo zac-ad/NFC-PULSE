@@ -556,6 +556,11 @@ export default function AdminDashboardClient() {
                   <tr key={card.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-5 py-4 font-mono font-bold text-white">
                       <div>{card.card_code}</div>
+                      {card.nfc_protection_status && (
+                        <div className="mt-1 text-[10px] font-normal text-white/25">
+                          NFC: {card.nfc_protection_status}
+                        </div>
+                      )}
                       {card.pending_card_code && (
                         <div className="mt-1 text-[10px] font-normal text-amber-300/70">
                           Pending: {card.pending_card_code}
