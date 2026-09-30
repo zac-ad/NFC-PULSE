@@ -182,6 +182,42 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
     }
   };
 
+  const handleSaveContact = () => {
+    const userAgent = navigator.userAgent || '';
+    const isAndroid = /Android/i.test(userAgent);
+    const vCardUrl = `/api/vcard/${encodeURIComponent(profile.slug)}`;
+
+    // Android Chrome can launch the system Contacts app from a user gesture
+    // using an Android Intent URI. The contact data is passed as intent extras,
+    // so the user lands on the native "Create contact" screen instead of
+    // downloading a .vcf file.
+    if (isAndroid) {
+      const extras = [
+        ['name', profile.full_name],
+        ['phone', profile.phone],
+        ['email', profile.email],
+        ['company', profile.company],
+        ['job_title', profile.title],
+      ]
+        .filter(([, value]) => Boolean(value))
+        .map(([key, value]) => `S.${key}=${encodeURIComponent(value)}`)
+        .join(';');
+
+      const fallback = `${window.location.origin}${vCardUrl}`;
+      const intentUrl =
+        `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;${extras};` +
+        `S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+
+      window.location.href = intentUrl;
+      return;
+    }
+
+    // iOS keeps the protected vCard endpoint inline so Safari can present
+    // its native contact preview. Desktop and unsupported browsers retain
+    // the standard .vcf download fallback.
+    window.location.href = vCardUrl;
+  };
+
   const isPro = profile.profile_type === 'PROFESSIONAL';
   const socialLinks = links.filter((l) => l.type !== 'qr');
   const qrCodes = links.filter((l) => l.type === 'qr');
@@ -286,13 +322,17 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
 
             {connected && (
               <div className="w-full mt-4">
-              <a href={`/api/vcard/${profile.slug}`}
-                className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-2xl hover:bg-neutral-200 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-[0.98]">
+              <button
+                type="button"
+                onClick={handleSaveContact}
+                className="w-full py-3.5 bg-white text-black font-bold text-xs uppercase tracking-wider rounded-2xl hover:bg-neutral-200 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-[0.98]"
+                aria-label="Save contact"
+              >
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                   <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
                 </svg>
                 Save to Contacts
-              </a>
+              </button>
               </div>
             )}
 
