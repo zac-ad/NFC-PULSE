@@ -79,10 +79,15 @@ export async function GET(
   const ua = request.headers.get('user-agent') || '';
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
+  // Keep the download filename safe even if a malformed slug reaches this route.
+  // The database currently enforces the same slug character set, but the
+  // header should not depend on that invariant alone.
+  const safeFilename = slug.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 80) || 'pulse-contact';
+
   const response = new NextResponse(vcardLines, {
     headers: {
       'Content-Type': 'text/vcard; charset=utf-8',
-      'Content-Disposition': `${isIOS ? 'inline' : 'attachment'}; filename="${slug}.vcf"`,
+      'Content-Disposition': `${isIOS ? 'inline' : 'attachment'}; filename="${safeFilename}.vcf"`,
     },
   });
   response.headers.set('Cache-Control', 'private, no-store, max-age=0');
