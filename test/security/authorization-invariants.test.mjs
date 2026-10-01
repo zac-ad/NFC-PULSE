@@ -104,3 +104,24 @@ test("least-privilege migration removes browser write privileges", () => {
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
   assert.match(migration, /grant select on table public\.profile_links to anon, authenticated/);
 });
+test("admin user deletion removes auth identity and fully releases assigned cards", () => {
+  const source = read("app/api/admin/users/route.ts");
+  assert.match(source, /auth\.admin\.listUsers/);
+  assert.match(source, /auth\.admin\.deleteUser\(authUser\.id\)/);
+  assert.match(source, /status: 'UNCLAIMED'/);
+  assert.match(source, /profile_id: null/);
+  assert.match(source, /tap_count: 0/);
+  assert.match(source, /pending_card_code: null/);
+  assert.match(source, /activation_secret_hash: hashActivationSecret\(activationSecret\)/);
+  assert.match(source, /viewer_sessions/);
+  assert.match(source, /profile-media/);
+  assert.doesNotMatch(source, /nfc_protection_status:/);
+});
+
+test("admin NFC controls are grouped as advanced hardware actions", () => {
+  const source = read("app/admin/AdminDashboardClient.tsx");
+  assert.match(source, /Advanced hardware/);
+  assert.match(source, /Physical NFC controls/);
+  assert.match(source, /NFC password/);
+});
+
