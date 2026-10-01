@@ -80,6 +80,22 @@ test("public media cannot be returned from the private bucket without a signed U
   assert.match(profileView, /signedProfileMediaUrl\(/);
 });
 
+
+test("activation provisions a confirmed Auth user and login never creates one", () => {
+  const activation = read("app/api/activate/route.ts");
+  assert.match(activation, /auth\\.admin\\.createUser\\(\\{[\\s\\S]*email,[\\s\\S]*email_confirm: true/);
+  assert.match(activation, /auth\\.admin\\.updateUserById\\([\\s\\S]*email_confirm: true/);
+
+  for (const path of [
+    "app/login/page.tsx",
+    "app/activate/page.tsx",
+    "app/portal/professional/login/page.tsx",
+    "app/portal/personal/login/page.tsx",
+  ]) {
+    const source = read(path);
+    assert.match(source, /shouldCreateUser: false/);
+  }
+});
 test("least-privilege migration removes browser write privileges", () => {
   const migration = read("supabase/migrations/20260924022007_least_privilege_grants.sql");
   assert.match(migration, /revoke all privileges on table public\.accounts from anon, authenticated/);
