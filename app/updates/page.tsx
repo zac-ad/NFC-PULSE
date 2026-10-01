@@ -2,6 +2,17 @@ import Link from 'next/link';
 
 const updates = [
   {
+    date: 'September 28, 2026',
+    label: 'Security · Activation',
+    title: 'Every card now has a second key.',
+    text: 'PULSE now separates the public card code from a private activation credential. The credential is issued separately, stored only as a hash, and consumed after a successful activation.',
+    points: [
+      'A copied card code alone cannot activate an unclaimed card.',
+      'Activation credentials are single-use and are never stored in plaintext.',
+      'Released cards receive a fresh activation credential before they can be activated again.',
+    ],
+  },
+  {
     date: 'September 27, 2026',
     label: 'Security · Tap experience',
     title: 'A stronger foundation for every tap.',
