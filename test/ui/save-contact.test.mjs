@@ -4,17 +4,15 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
-test("Save to Contacts uses Android Contacts intent without a vCard fallback", () => {
+test("Save to Contacts uses the protected vCard flow on Android and other browsers", () => {
   const source = read("app/p/[slug]/page.tsx");
 
   assert.match(source, /const handleSaveContact = \(\) =>/);
-  assert.match(source, /const isAndroid = \/Android\/i\.test\(userAgent\)/);
-  assert.match(source, /action=android\\.intent\\.action\\.INSERT/);
-  assert.match(source, /vnd\.android\.cursor\.dir\/raw_contact/);
-  assert.match(source, /S\.name=\$\{encodeURIComponent\(value\)\}/);
-  assert.match(source, /S\.phone=\$\{encodeURIComponent\(value\)\}/);
-  assert.match(source, /S\.email=\$\{encodeURIComponent\(value\)\}/);
-  assert.doesNotMatch(source, /S\.browser_fallback_url=/);
-  assert.match(source, /window\.location\.href = intentUrl/);
-  assert.doesNotMatch(source, /<a href=\{`\/api\/vcard\/\$\{profile\.slug\}`/);
+  assert.match(source, /const vCardUrl = `\/api\/vcard\/\$\{encodeURIComponent\(profile\.slug\)\}`/);
+  assert.match(source, /window\.location\.href = vCardUrl/);
+  assert.doesNotMatch(source, /action=android\.intent\.action\.INSERT/);
+  assert.doesNotMatch(source, /vnd\.android\.cursor\.dir\/raw_contact/);
+  assert.doesNotMatch(source, /S\.name=\$\{encodeURIComponent\(value\)\}/);
+  assert.doesNotMatch(source, /S\.phone=\$\{encodeURIComponent\(value\)\}/);
+  assert.doesNotMatch(source, /S\.email=\$\{encodeURIComponent\(value\)\}/);
 });
