@@ -24,6 +24,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: {
+        shouldCreateUser: false,
         emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
       },
     });
