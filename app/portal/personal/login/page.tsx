@@ -15,7 +15,7 @@ export default function PersonalLoginPage() {
     setLoading(true); setError('');
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=%2Fdashboard` },
+      options: { shouldCreateUser: false, emailRedirectTo: `${window.location.origin}/auth/callback?next=%2Fdashboard` },
     });
     if (err) { setError(err.message); } else { setSent(true); }
     setLoading(false);
