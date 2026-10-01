@@ -187,10 +187,9 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
     const isAndroid = /Android/i.test(userAgent);
     const vCardUrl = `/api/vcard/${encodeURIComponent(profile.slug)}`;
 
-    // Android Chrome can launch the system Contacts app from a user gesture
-    // using an Android Intent URI. The contact data is passed as intent extras,
-    // so the user lands on the native "Create contact" screen instead of
-    // downloading a .vcf file.
+    // Android uses a native Contacts INSERT intent. There is intentionally
+    // no browser fallback here: PULSE must not silently download a .vcf file
+    // when the browser cannot launch the native Contacts activity.
     if (isAndroid) {
       const extras = [
         ['name', profile.full_name],
@@ -203,10 +202,8 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
         .map(([key, value]) => `S.${key}=${encodeURIComponent(value)}`)
         .join(';');
 
-      const fallback = `${window.location.origin}${vCardUrl}`;
       const intentUrl =
-        `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;${extras};` +
-        `S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+        `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;${extras};end`;
 
       window.location.href = intentUrl;
       return;
@@ -214,7 +211,7 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
 
     // iOS keeps the protected vCard endpoint inline so Safari can present
     // its native contact preview. Desktop and unsupported browsers retain
-    // the standard .vcf download fallback.
+    // the standard vCard path.
     window.location.href = vCardUrl;
   };
 
