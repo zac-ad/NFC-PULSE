@@ -202,8 +202,10 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
         .map(([key, value]) => `S.${key}=${encodeURIComponent(value)}`)
         .join(';');
 
+      // Contacts apps commonly expose the raw-contact insertion MIME type
+      // for browser-launched Android intents.
       const intentUrl =
-        `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;${extras};end`;
+        `intent://vnd.android.cursor.dir/raw_contact/#Intent;action=android.intent.action.INSERT;${extras};end`;
 
       window.location.href = intentUrl;
       return;
