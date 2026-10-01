@@ -18,6 +18,56 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashActivationSecret } from '@/lib/activationSecret';
 
+async function ensureAuthUser(email: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+  });
+
+  if (!createError) return { ok: true };
+
+  // A retry or an already-existing PULSE account should not fail activation.
+  // Only fall back to lookup for the expected duplicate-user condition.
+  const duplicate = /already registered|already exists|user already/i.test(createError.message);
+  if (!duplicate) {
+    console.error('Auth user creation failed:', createError.message);
+    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+  }
+
+  const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+
+  if (listError) {
+    console.error('Auth user lookup failed:', listError.message);
+    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+  }
+
+  const existingUser = usersData.users.find(
+    user => user.email?.trim().toLowerCase() === email
+  );
+
+  if (!existingUser) {
+    console.error('Auth user exists error but matching user was not found.');
+    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+  }
+
+  if (existingUser.email_confirmed_at) return { ok: true };
+
+  const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+    existingUser.id,
+    { email_confirm: true }
+  );
+
+  if (confirmError) {
+    console.error('Auth user confirmation failed:', confirmError.message);
+    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+  }
+
+  return { ok: true };
+}
+
 export async function POST(request: Request) {
 
   // Rate limit: 5 activation attempts per IP per 10 minutes.
@@ -113,6 +163,14 @@ export async function POST(request: Request) {
       400;
 
     return NextResponse.json({ error: result.error }, { status });
+  }
+
+  // Activation creates the PULSE account/profile in Postgres. Supabase Auth is
+  // kept separate, so create and auto-confirm the passwordless login identity
+  // before sending the sign-in link from the activation page.
+  const authResult = await ensureAuthUser(cleanEmail);
+  if (!authResult.ok) {
+    return NextResponse.json({ error: authResult.error }, { status: 503 });
   }
 
   return NextResponse.json({ success: true, slug: result.slug });
