@@ -56,10 +56,7 @@ ALTER TABLE public.accounts
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_auth_user_id_key
   ON public.accounts(auth_user_id);
 
-DROP FUNCTION IF EXISTS public.activate_card(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
-DROP FUNCTION IF EXISTS public.activate_card(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID);
-
-CREATE OR REPLACE FUNCTION public.activate_card(
+CREATE OR REPLACE FUNCTION public.activate_card_v2(
   p_card_code TEXT,
   p_activation_secret_hash TEXT,
   p_email TEXT,
@@ -228,7 +225,7 @@ EXCEPTION
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.activate_card(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.activate_card(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.activate_card(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.activate_card(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.activate_card_v2(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.activate_card_v2(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.activate_card_v2(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.activate_card_v2(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) TO service_role;
