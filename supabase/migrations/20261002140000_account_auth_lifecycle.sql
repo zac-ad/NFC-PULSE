@@ -79,6 +79,7 @@ DECLARE
   v_profile_id UUID;
   v_slug_owner UUID;
   v_auth_email TEXT;
+  v_account_exists BOOLEAN;
 BEGIN
   IF p_card_code IS NULL OR trim(p_card_code) = '' THEN
     RETURN json_build_object('error', 'Card code is required.');
@@ -142,17 +143,19 @@ BEGIN
    WHERE email = lower(trim(p_email))
      FOR UPDATE;
 
+  v_account_exists := FOUND;
+
   -- Check the requested slug before changing or creating the account. This
   -- keeps every early validation failure side-effect free.
   SELECT account_id INTO v_slug_owner
     FROM public.profiles
    WHERE slug = lower(trim(p_slug));
 
-  IF FOUND AND (v_account.id IS NULL OR v_slug_owner <> v_account.id) THEN
+  IF FOUND AND (v_account_exists = FALSE OR v_slug_owner <> v_account.id) THEN
     RETURN json_build_object('error', 'That PULSE link is already taken. Try a different one.');
   END IF;
 
-  IF FOUND THEN
+  IF v_account_exists THEN
     IF v_account.deletion_status <> 'ACTIVE' THEN
       RETURN json_build_object('error', 'This account is still being removed. Please try again after cleanup is complete.');
     END IF;
