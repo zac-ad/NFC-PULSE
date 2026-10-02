@@ -62,3 +62,21 @@ test("card release generates and stores a fresh activation secret", () => {
   assert.match(release, /activation_secret_issued_at/);
   assert.match(release, /activationSecret/);
 });
+
+
+test("activation binds the PULSE account to the exact Auth user", () => {
+  const migration = read("supabase/migrations/20261002140000_account_auth_lifecycle.sql");
+  const route = read("app/api/activate/route.ts");
+  assert.match(migration, /auth_user_id\s+UUID/);
+  assert.match(migration, /references auth\.users\(id\)/i);
+  assert.match(migration, /p_auth_user_id\s+UUID/);
+  assert.match(migration, /The login identity does not match this email address/);
+  assert.match(route, /auth\.admin\.getUserById/);
+  assert.match(route, /p_auth_user_id:\s*authResult\.userId/);
+});
+
+test("activation rolls back a newly-created Auth user when database activation fails", () => {
+  const route = read("app/api/activate/route.ts");
+  assert.match(route, /authResult\.created/);
+  assert.match(route, /auth\.admin\.deleteUser\(userId\)/);
+});
