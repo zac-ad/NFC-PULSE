@@ -188,7 +188,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: authResult.error }, { status: 409 });
   }
 
-  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card', {
+  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card_v2', {
     p_card_code: cleanCode,
     p_activation_secret_hash: hashActivationSecret(cleanSecret),
     p_email: cleanEmail,
