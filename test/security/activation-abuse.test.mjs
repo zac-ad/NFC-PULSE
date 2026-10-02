@@ -8,7 +8,7 @@ test("activation rate limit runs before parsing or database activation", () => {
   const source = read("app/api/activate/route.ts");
   const limiter = source.indexOf("checkRateLimit");
   const parse = source.indexOf("request.json");
-  const rpc = source.indexOf(".rpc('activate_card'");
+  const rpc = source.indexOf(".rpc('activate_card_v2'");
   assert.ok(limiter >= 0);
   assert.ok(parse > limiter);
   assert.ok(rpc > limiter);
