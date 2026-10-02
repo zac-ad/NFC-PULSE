@@ -83,7 +83,7 @@ test("public media cannot be returned from the private bucket without a signed U
 
 test("activation provisions a confirmed Auth user and login never creates one", () => {
   const activation = read("app/api/activate/route.ts");
-  assert.match(activation, /auth\\.admin\\.createUser\\(\\{[\\s\\S]*email,[\\s\\S]*email_confirm: true/);
+  assert.match(activation, /auth\.admin\.createUser\(\{[\s\S]*email,[\s\S]*email_confirm: true/);
   assert.match(activation, /auth\\.admin\\.updateUserById\\([\\s\\S]*email_confirm: true/);
 
   for (const path of [
