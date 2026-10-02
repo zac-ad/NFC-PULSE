@@ -142,6 +142,16 @@ BEGIN
    WHERE email = lower(trim(p_email))
      FOR UPDATE;
 
+  -- Check the requested slug before changing or creating the account. This
+  -- keeps every early validation failure side-effect free.
+  SELECT account_id INTO v_slug_owner
+    FROM public.profiles
+   WHERE slug = lower(trim(p_slug));
+
+  IF FOUND AND (v_account.id IS NULL OR v_slug_owner <> v_account.id) THEN
+    RETURN json_build_object('error', 'That PULSE link is already taken. Try a different one.');
+  END IF;
+
   IF FOUND THEN
     IF v_account.deletion_status <> 'ACTIVE' THEN
       RETURN json_build_object('error', 'This account is still being removed. Please try again after cleanup is complete.');
@@ -159,14 +169,6 @@ BEGIN
     VALUES (lower(trim(p_email)), p_auth_user_id, 'ACTIVE')
     RETURNING id, auth_user_id, deletion_status
       INTO v_account;
-  END IF;
-
-  SELECT account_id INTO v_slug_owner
-    FROM public.profiles
-   WHERE slug = lower(trim(p_slug));
-
-  IF FOUND AND v_slug_owner <> v_account.id THEN
-    RETURN json_build_object('error', 'That PULSE link is already taken. Try a different one.');
   END IF;
 
   SELECT id INTO v_profile_id
