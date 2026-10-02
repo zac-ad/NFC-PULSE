@@ -52,7 +52,7 @@ test("viewer-session responses are explicitly non-cacheable", () => {
 
 test("vCard responses use a safe filename and are explicitly non-cacheable", () => {
   const source = read("app/api/vcard/[slug]/route.ts");
-  assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)/);
+  assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)\.slice\(0, 80\) \|\| 'pulse-contact'/);
   assert.match(source, /filename=\\"\$\{safeFilename\}\.vcf\\"/);
   assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
 });
@@ -65,7 +65,7 @@ test("vCard rejects requests without a valid viewer session", () => {
 test("activation is rate-limited before the database operation", () => {
   const source = read("app/api/activate/route.ts");
   const rateLimitIndex = source.indexOf("checkRateLimit");
-  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card'");
+  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card_v2'");
   assert.ok(rateLimitIndex >= 0);
   assert.ok(rpcIndex >= 0);
   assert.ok(rateLimitIndex < rpcIndex);
@@ -83,8 +83,8 @@ test("public media cannot be returned from the private bucket without a signed U
 
 test("activation provisions a confirmed Auth user and login never creates one", () => {
   const activation = read("app/api/activate/route.ts");
-  assert.match(activation, /auth\\.admin\\.createUser\\(\\{[\\s\\S]*email,[\\s\\S]*email_confirm: true/);
-  assert.match(activation, /auth\\.admin\\.updateUserById\\([\\s\\S]*email_confirm: true/);
+  assert.match(activation, /auth\.admin\.createUser\(\{[\s\S]*email,[\s\S]*email_confirm: true/);
+  assert.match(activation, /auth\.admin\.updateUserById\([\s\S]*email_confirm: true/);
 
   for (const path of [
     "app/login/page.tsx",
@@ -104,10 +104,15 @@ test("least-privilege migration removes browser write privileges", () => {
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
   assert.match(migration, /grant select on table public\.profile_links to anon, authenticated/);
 });
-test("admin user deletion removes auth identity and fully releases assigned cards", () => {
+test("admin user deletion is resumable and uses the exact Auth identity", () => {
   const source = read("app/api/admin/users/route.ts");
-  assert.match(source, /auth\.admin\.listUsers/);
-  assert.match(source, /auth\.admin\.deleteUser\(authUser\.id\)/);
+  const migration = read("supabase/migrations/20261002071402_account_auth_lifecycle.sql");
+  assert.match(migration, /deletion_status TEXT NOT NULL DEFAULT 'ACTIVE'/);
+  assert.match(source, /auth_user_id/);
+  assert.match(source, /deletion_status/);
+  assert.match(source, /status: 'DELETING'/);
+  assert.match(source, /auth\.admin\.deleteUser\(/);
+  assert.doesNotMatch(source, /auth\.admin\.listUsers/);
   assert.match(source, /status: 'UNCLAIMED'/);
   assert.match(source, /profile_id: null/);
   assert.match(source, /tap_count: 0/);

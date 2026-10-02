@@ -9,7 +9,7 @@ test("Save to Contacts uses Android Contacts intent without a vCard fallback", (
 
   assert.match(source, /const handleSaveContact = \(\) =>/);
   assert.match(source, /const isAndroid = \/Android\/i\.test\(userAgent\)/);
-  assert.match(source, /action=android\\.intent\\.action\\.INSERT/);
+  assert.match(source, /action=android\.intent\.action\.INSERT/);
   assert.match(source, /vnd\.android\.cursor\.dir\/raw_contact/);
   assert.match(source, /S\.name=\$\{encodeURIComponent\(value\)\}/);
   assert.match(source, /S\.phone=\$\{encodeURIComponent\(value\)\}/);

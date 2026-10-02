@@ -8,7 +8,7 @@ test("activation rate limit runs before parsing or database activation", () => {
   const source = read("app/api/activate/route.ts");
   const limiter = source.indexOf("checkRateLimit");
   const parse = source.indexOf("request.json");
-  const rpc = source.indexOf(".rpc('activate_card'");
+  const rpc = source.indexOf(".rpc('activate_card_v2'");
   assert.ok(limiter >= 0);
   assert.ok(parse > limiter);
   assert.ok(rpc > limiter);
@@ -31,7 +31,7 @@ test("activation maps claimed, missing, and concurrent-card states to non-succes
 test("atomic activation is the only database write path in the route", () => {
   const source = read("app/api/activate/route.ts");
   assert.equal((source.match(/\.rpc\(/g) || []).length, 1);
-  assert.match(source, /\.rpc\('activate_card'/);
+  assert.match(source, /\.rpc\('activate_card_v2'/);
   assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
 });
 
