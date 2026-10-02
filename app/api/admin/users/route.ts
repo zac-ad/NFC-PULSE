@@ -50,6 +50,23 @@ export async function DELETE(request: Request) {
     }
   }
 
+  // Remove the exact Auth identity as early as possible. If a later cleanup
+  // step fails, the account remains DELETING and can be retried without
+  // leaving a usable login behind.
+  if (account.auth_user_id) {
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(
+      account.auth_user_id
+    );
+
+    if (authDeleteError) {
+      console.error('[admin/users DELETE] auth deletion:', authDeleteError.message);
+      return NextResponse.json(
+        { error: 'The login identity could not be deleted. The account is safely marked for cleanup; please retry.' },
+        { status: 500 }
+      );
+    }
+  }
+
   const { data: profiles, error: profilesError } = await supabaseAdmin
     .from('profiles')
     .select('id')
@@ -113,22 +130,6 @@ export async function DELETE(request: Request) {
         console.error('[admin/users DELETE] viewer session cleanup:', sessionsError.message);
         return NextResponse.json({ error: 'Could not clear card sessions. Deletion is still in progress.' }, { status: 500 });
       }
-    }
-  }
-
-  // Remove the exact Auth identity recorded on the PULSE account. We never
-  // scan Auth users by email during deletion.
-  if (account.auth_user_id) {
-    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(
-      account.auth_user_id
-    );
-
-    if (authDeleteError) {
-      console.error('[admin/users DELETE] auth deletion:', authDeleteError.message);
-      return NextResponse.json(
-        { error: 'The login identity could not be deleted. The account is safely marked for cleanup; please retry.' },
-        { status: 500 }
-      );
     }
   }
 
