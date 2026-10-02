@@ -106,7 +106,7 @@ test("least-privilege migration removes browser write privileges", () => {
 });
 test("admin user deletion is resumable and uses the exact Auth identity", () => {
   const source = read("app/api/admin/users/route.ts");
-  const migration = read("supabase/migrations/20261002140000_account_auth_lifecycle.sql");
+  const migration = read("supabase/migrations/20261002071402_account_auth_lifecycle.sql");
   assert.match(migration, /deletion_status TEXT NOT NULL DEFAULT 'ACTIVE'/);
   assert.match(source, /auth_user_id/);
   assert.match(source, /deletion_status/);
