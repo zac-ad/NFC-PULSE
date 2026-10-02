@@ -31,7 +31,7 @@ test("activation maps claimed, missing, and concurrent-card states to non-succes
 test("atomic activation is the only database write path in the route", () => {
   const source = read("app/api/activate/route.ts");
   assert.equal((source.match(/\.rpc\(/g) || []).length, 1);
-  assert.match(source, /\.rpc\('activate_card'/);
+  assert.match(source, /\.rpc\('activate_card_v2'/);
   assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
 });
 
