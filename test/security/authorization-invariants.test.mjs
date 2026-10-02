@@ -65,7 +65,7 @@ test("vCard rejects requests without a valid viewer session", () => {
 test("activation is rate-limited before the database operation", () => {
   const source = read("app/api/activate/route.ts");
   const rateLimitIndex = source.indexOf("checkRateLimit");
-  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card'");
+  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card_v2'");
   assert.ok(rateLimitIndex >= 0);
   assert.ok(rpcIndex >= 0);
   assert.ok(rateLimitIndex < rpcIndex);
@@ -84,7 +84,7 @@ test("public media cannot be returned from the private bucket without a signed U
 test("activation provisions a confirmed Auth user and login never creates one", () => {
   const activation = read("app/api/activate/route.ts");
   assert.match(activation, /auth\.admin\.createUser\(\{[\s\S]*email,[\s\S]*email_confirm: true/);
-  assert.match(activation, /auth\\.admin\\.updateUserById\\([\\s\\S]*email_confirm: true/);
+  assert.match(activation, /auth\.admin\.updateUserById\([\s\S]*email_confirm: true/);
 
   for (const path of [
     "app/login/page.tsx",
