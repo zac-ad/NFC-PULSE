@@ -65,7 +65,7 @@ test("card release generates and stores a fresh activation secret", () => {
 
 
 test("activation binds the PULSE account to the exact Auth user", () => {
-  const migration = read("supabase/migrations/20261002140000_account_auth_lifecycle.sql");
+  const migration = read("supabase/migrations/20261002071402_account_auth_lifecycle.sql");
   const route = read("app/api/activate/route.ts");
   assert.match(migration, /auth_user_id\s+UUID/);
   assert.match(migration, /references auth\.users\(id\)/i);
