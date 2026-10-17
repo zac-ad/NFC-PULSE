@@ -183,37 +183,12 @@ function ProfileContent({ profile, links, connected }: { profile: ProfileData; l
   };
 
   const handleSaveContact = () => {
-    const userAgent = navigator.userAgent || '';
-    const isAndroid = /Android/i.test(userAgent);
     const vCardUrl = `/api/vcard/${encodeURIComponent(profile.slug)}`;
 
-    // Android uses a native Contacts INSERT intent. There is intentionally
-    // no browser fallback here: PULSE must not silently download a .vcf file
-    // when the browser cannot launch the native Contacts activity.
-    if (isAndroid) {
-      const extras = [
-        ['name', profile.full_name],
-        ['phone', profile.phone],
-        ['email', profile.email],
-        ['company', profile.company],
-        ['job_title', profile.title],
-      ]
-        .filter(([, value]) => Boolean(value))
-        .map(([key, value]) => `S.${key}=${encodeURIComponent(value)}`)
-        .join(';');
-
-      // Contacts apps commonly expose the raw-contact insertion MIME type
-      // for browser-launched Android intents.
-      const intentUrl =
-        `intent://vnd.android.cursor.dir/raw_contact/#Intent;action=android.intent.action.INSERT;${extras};end`;
-
-      window.location.href = intentUrl;
-      return;
-    }
-
-    // iOS keeps the protected vCard endpoint inline so Safari can present
-    // its native contact preview. Desktop and unsupported browsers retain
-    // the standard vCard path.
+    // Keep the vCard flow as the cross-device contact export for now.
+    // Android browsers can download/open the protected .vcf file and let
+    // the user import it into Contacts without relying on browser-specific
+    // intent support.
     window.location.href = vCardUrl;
   };
 
