@@ -138,3 +138,14 @@ test("new uploads sign the generated storage path instead of parsing it as a URL
   assert.match(media, /normalized\.startsWith\('\/'\)/);
   assert.match(media, /normalized\.includes\('\.\.'\)/);
 });
+
+
+test("activation binds the card to the exact Supabase Auth identity", () => {
+  const route = read("app/api/activate/route.ts");
+  assert.match(route, /ensureAuthUser\(cleanEmail\)/);
+  assert.match(route, /rpc\('activate_card_v2'/);
+  assert.match(route, /p_auth_user_id:\s*authResult\.userId/);
+  assert.doesNotMatch(route, /rpc\('activate_card',/);
+  assert.match(route, /Do not delete a newly created Auth identity on transport failure/);
+  assert.match(route, /auth\.admin\.listUsers\(\{ page, perPage: 1000 \}\)/);
+});
