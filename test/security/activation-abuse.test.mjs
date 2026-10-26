@@ -8,7 +8,7 @@ test("activation rate limit runs before parsing or database activation", () => {
   const source = read("app/api/activate/route.ts");
   const limiter = source.indexOf("checkRateLimit");
   const parse = source.indexOf("request.json");
-  const rpc = source.indexOf(".rpc('activate_card'");
+  const rpc = source.indexOf(".rpc('activate_card_v2'");
   assert.ok(limiter >= 0);
   assert.ok(parse > limiter);
   assert.ok(rpc > limiter);
@@ -24,7 +24,7 @@ test("activation normalizes card codes before the atomic RPC", () => {
 test("activation maps claimed, missing, and concurrent-card states to non-success responses", () => {
   const source = read("app/api/activate/route.ts");
   assert.match(source, /already been activated.*409/);
-  assert.match(source, /couldn\\'t find that card.*404/);
+  assert.match(source, /couldn\\'t find that card/);\n  assert.match(source, /message.includes\\(\"couldn\\\\'t find that card\"\\) \\? 404/);
   assert.match(source, /being activated right now.*409/);
 });
 
