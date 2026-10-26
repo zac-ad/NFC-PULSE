@@ -18,54 +18,53 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashActivationSecret } from '@/lib/activationSecret';
 
-async function ensureAuthUser(email: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+type AuthUserResult =
+  | { ok: true; userId: string; created: boolean }
+  | { ok: false; error: string };
+
+async function ensureAuthUser(email: string): Promise<AuthUserResult> {
+  const { data: createdData, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true,
   });
 
-  if (!createError) return { ok: true };
+  if (!createError && createdData.user) {
+    return { ok: true, userId: createdData.user.id, created: true };
+  }
 
-  // A retry or an already-existing PULSE account should not fail activation.
-  // Only fall back to lookup for the expected duplicate-user condition.
-  const duplicate = /already registered|already exists|user already/i.test(createError.message);
-  if (!duplicate) {
-    console.error('Auth user creation failed:', createError.message);
+  if (!createError || !/already registered|already exists|user already/i.test(createError.message)) {
+    console.error('Auth user creation failed:', createError?.message || 'No user returned');
     return { ok: false, error: 'Could not prepare your login account. Please try again.' };
   }
 
-  const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
+  // Page through Auth users rather than silently limiting lookup to the first 1,000.
+  for (let page = 1; page <= 100; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) {
+      console.error('Auth user lookup failed:', error.message);
+      return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+    }
 
-  if (listError) {
-    console.error('Auth user lookup failed:', listError.message);
-    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+    const existing = data.users.find(user => user.email?.trim().toLowerCase() === email);
+    if (existing) {
+      if (!existing.email_confirmed_at) {
+        const { data: confirmed, error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+          existing.id,
+          { email_confirm: true }
+        );
+        if (confirmError || !confirmed.user) {
+          console.error('Auth user confirmation failed:', confirmError?.message || 'No user returned');
+          return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+        }
+      }
+      return { ok: true, userId: existing.id, created: false };
+    }
+
+    if (data.users.length < 1000) break;
   }
 
-  const existingUser = usersData.users.find(
-    user => user.email?.trim().toLowerCase() === email
-  );
-
-  if (!existingUser) {
-    console.error('Auth user exists error but matching user was not found.');
-    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
-  }
-
-  if (existingUser.email_confirmed_at) return { ok: true };
-
-  const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
-    existingUser.id,
-    { email_confirm: true }
-  );
-
-  if (confirmError) {
-    console.error('Auth user confirmation failed:', confirmError.message);
-    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
-  }
-
-  return { ok: true };
+  console.error('Auth user exists error but matching user was not found after paginated lookup.');
+  return { ok: false, error: 'Could not prepare your login account. Please try again.' };
 }
 
 export async function POST(request: Request) {
@@ -123,54 +122,61 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid profile type.' }, { status: 400 });
   }
 
-  // Call the atomic Postgres function.
-  // activate_card() always returns a JSON object with either:
-  //   { success: true, slug, profile_id, account_id }
-  //   { error: "human readable message" }
-  //
-  // It never throws — all exceptions are caught inside the function
-  // and returned as { error: "..." } — so we only need to handle the
-  // case where the RPC call itself fails (network, Supabase outage).
-  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card', {
-    p_card_code:    cleanCode,
+  // Prepare the Auth identity first, then bind that exact identity and the card
+  // in the same database transaction through activate_card_v2.
+  const authResult = await ensureAuthUser(cleanEmail);
+  if (!authResult.ok) {
+    return NextResponse.json({ error: authResult.error }, { status: 503 });
+  }
+
+  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card_v2', {
+    p_card_code: cleanCode,
     p_activation_secret_hash: hashActivationSecret(cleanSecret),
-    p_email:        cleanEmail,
-    p_full_name:    cleanName,
-    p_slug:         cleanSlug,
+    p_email: cleanEmail,
+    p_full_name: cleanName,
+    p_slug: cleanSlug,
     p_profile_type: cleanType,
+    p_auth_user_id: authResult.userId,
   });
 
   if (rpcError) {
-    // RPC transport failure — the function didn't run at all.
-    console.error('activate_card RPC error:', rpcError.message);
+    // Do not delete a newly created Auth identity on transport failure: the
+    // database transaction may have committed even if the response was lost.
+    // A retry can safely reuse the identity and reconcile the account.
+    console.error('activate_card_v2 RPC error:', rpcError.message);
     return NextResponse.json(
-      { error: 'Could not reach the database. Please try again.' },
+      { error: 'Could not complete activation. Please try again.' },
       { status: 503 }
     );
   }
 
-  // The function ran — check its returned JSON for success or error.
   const result = data as { success?: boolean; error?: string; slug?: string };
-
-  if (result.error) {
-    // Determine the right HTTP status from the error content.
+  if (!result || result.error || !result.success) {
+    const message = result?.error || 'Activation could not be completed. Please try again.';
     const status =
-      result.error.includes('already been activated') ? 409 :
-      result.error.includes('activation secret') ? 403 :
-      result.error.includes('PULSE link is already taken') ? 409 :
-      result.error.includes('couldn\'t find that card') ? 404 :
-      result.error.includes('being activated right now') ? 409 :
+      message.includes('already been activated') ? 409 :
+      message.includes('activation secret') ? 403 :
+      message.includes('PULSE link is already taken') || message.includes('already connected') ? 409 :
+      message.includes("couldn't find that card") ? 404 :
+      message.includes('being activated right now') ? 409 :
+      message.includes('still being removed') ? 409 :
       400;
 
-    return NextResponse.json({ error: result.error }, { status });
-  }
+    // If this request created the Auth user but the DB did not bind it to an
+    // account, remove that unused identity. Never do this after transport errors.
+    if (authResult.created) {
+      const { data: linkedAccount, error: lookupError } = await supabaseAdmin
+        .from('accounts')
+        .select('id')
+        .eq('auth_user_id', authResult.userId)
+        .maybeSingle();
+      if (!lookupError && !linkedAccount) {
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authResult.userId);
+        if (deleteError) console.error('Unused Auth identity cleanup failed:', deleteError.message);
+      }
+    }
 
-  // Activation creates the PULSE account/profile in Postgres. Supabase Auth is
-  // kept separate, so create and auto-confirm the passwordless login identity
-  // before sending the sign-in link from the activation page.
-  const authResult = await ensureAuthUser(cleanEmail);
-  if (!authResult.ok) {
-    return NextResponse.json({ error: authResult.error }, { status: 503 });
+    return NextResponse.json({ error: message }, { status });
   }
 
   return NextResponse.json({ success: true, slug: result.slug });
