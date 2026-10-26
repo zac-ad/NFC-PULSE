@@ -24,14 +24,15 @@ test("activation normalizes card codes before the atomic RPC", () => {
 test("activation maps claimed, missing, and concurrent-card states to non-success responses", () => {
   const source = read("app/api/activate/route.ts");
   assert.match(source, /already been activated.*409/);
-  assert.match(source, /couldn\\'t find that card/);\n  assert.match(source, /message.includes\\(\"couldn\\\\'t find that card\"\\) \\? 404/);
+  assert.match(source, /couldn\'t find that card/);
+  assert.match(source, /message\.includes\("couldn\'t find that card"\) \? 404/);
   assert.match(source, /being activated right now.*409/);
 });
 
 test("atomic activation is the only database write path in the route", () => {
   const source = read("app/api/activate/route.ts");
   assert.equal((source.match(/\.rpc\(/g) || []).length, 1);
-  assert.match(source, /\.rpc\('activate_card'/);
+  assert.match(source, /\.rpc\('activate_card_v2'/);
   assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
 });
 
