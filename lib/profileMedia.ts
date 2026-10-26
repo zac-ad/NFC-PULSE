@@ -91,3 +91,27 @@ export async function signedProfileMediaUrl(
 
   return data.signedUrl;
 }
+export async function signedProfileMediaPath(
+  path: string,
+  expiresIn = 3600
+): Promise<string> {
+  const normalized = path.trim();
+  if (
+    !normalized ||
+    normalized.startsWith('/') ||
+    normalized.includes('..') ||
+    normalized.includes('\\\\')
+  ) {
+    throw new Error('Invalid profile media path.');
+  }
+
+  const { data, error } = await supabaseAdmin.storage
+    .from(PROFILE_MEDIA_BUCKET)
+    .createSignedUrl(normalized, expiresIn);
+
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message || 'Unable to create signed media URL.');
+  }
+
+  return data.signedUrl;
+}
