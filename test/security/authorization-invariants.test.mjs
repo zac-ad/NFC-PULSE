@@ -125,3 +125,16 @@ test("admin NFC controls are grouped as advanced hardware actions", () => {
   assert.match(source, /NFC password/);
 });
 
+
+
+test("new uploads sign the generated storage path instead of parsing it as a URL", () => {
+  const upload = read("app/api/upload/route.ts");
+  const media = read("lib/profileMedia.ts");
+
+  assert.match(upload, /signedProfileMediaPath\(path, 3600\)/);
+  assert.doesNotMatch(upload, /signedProfileMediaUrl\(path, 3600\)/);
+  assert.match(media, /export async function signedProfileMediaPath\(/);
+  assert.match(media, /\.from\(PROFILE_MEDIA_BUCKET\)\s*\.createSignedUrl\(normalized, expiresIn\)/);
+  assert.match(media, /normalized\.startsWith\('\/'\)/);
+  assert.match(media, /normalized\.includes\('\.\.'\)/);
+});
