@@ -100,7 +100,7 @@ export async function signedProfileMediaPath(
     !normalized ||
     normalized.startsWith('/') ||
     normalized.includes('..') ||
-    normalized.includes('\\\\')
+    normalized.includes(String.fromCharCode(92))
   ) {
     throw new Error('Invalid profile media path.');
   }
