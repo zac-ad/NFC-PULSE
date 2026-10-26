@@ -300,13 +300,26 @@ function DashboardContent() {
 
   // ── File upload — authenticated server route ─────────────────
   const handleFileUpload = async (file: File, type: 'avatar' | 'banner' | 'qr') => {
-    if (!currentProfileId) return;
+    if (!currentProfileId) {
+      setMessage({ type: 'error', text: 'Choose a profile before uploading.' });
+      return;
+    }
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!supportedTypes.includes(file.type)) {
+      setMessage({ type: 'error', text: 'Use a JPG, PNG, WebP, or GIF image.' });
+      return;
+    }
+    if (file.size < 1 || file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Choose an image smaller than 5 MB.' });
+      return;
+    }
+    setMessage(null);
     if (type === 'avatar') setUploadingAvatar(true);
     if (type === 'banner') setUploadingBanner(true);
     if (type === 'qr') setUploadingQr(true);
     try {
       const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
+      if (!token) throw new Error('Your session expired. Please sign in again.');
 
       const form = new FormData();
       form.append('profileId', currentProfileId);
@@ -318,15 +331,16 @@ function DashboardContent() {
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Upload failed');
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || `Upload failed (HTTP ${res.status}). Please try again.`);
+      if (!result.publicUrl) throw new Error('The upload finished, but PULSE could not create an image link. Please try again.');
 
       if (type === 'avatar') setAvatarUrl(result.publicUrl);
       if (type === 'banner') setBannerUrl(result.publicUrl);
       if (type === 'qr') setQrImageUrl(result.publicUrl);
       setMessage({ type: 'success', text: 'File uploaded.' });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Upload failed.';
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       setMessage({ type: 'error', text: msg });
     } finally {
       setUploadingAvatar(false);
@@ -608,17 +622,25 @@ function DashboardContent() {
 
               <div className="grid grid-cols-2 gap-4 pb-4 border-b border-white/[0.06]">
                 <Field label="Avatar">
-                  <input type="file" accept="image/*"
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif"
                     disabled={uploadingAvatar}
-                    onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'avatar')}
+                    onChange={e => {
+                      const file = e.currentTarget.files?.[0];
+                      e.currentTarget.value = '';
+                      if (file) void handleFileUpload(file, 'avatar');
+                    }}
                     className="block w-full text-[12px] text-white/35 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-white/10 file:text-white/70 cursor-pointer"
                   />
                   {avatarUrl && <img src={avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-white/10 mt-1" />}
                 </Field>
                 <Field label="Banner">
-                  <input type="file" accept="image/*"
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif"
                     disabled={uploadingBanner}
-                    onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'banner')}
+                    onChange={e => {
+                      const file = e.currentTarget.files?.[0];
+                      e.currentTarget.value = '';
+                      if (file) void handleFileUpload(file, 'banner');
+                    }}
                     className="block w-full text-[12px] text-white/35 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-white/10 file:text-white/70 cursor-pointer"
                   />
                   {bannerUrl && <img src={bannerUrl} alt="Banner" className="w-14 h-8 rounded-lg object-cover border border-white/10 mt-1" />}
@@ -725,9 +747,13 @@ function DashboardContent() {
                     value={qrTitle} onChange={e => setQrTitle(e.target.value)}
                     className="flex-1 bg-[#1a1a1a] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
                   />
-                  <input type="file" accept="image/*"
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif"
                     disabled={uploadingQr}
-                    onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'qr')}
+                    onChange={e => {
+                      const file = e.currentTarget.files?.[0];
+                      e.currentTarget.value = '';
+                      if (file) void handleFileUpload(file, 'qr');
+                    }}
                     className="flex-1 text-[12px] text-white/35 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-white/10 file:text-white/70 cursor-pointer"
                   />
                 </div>

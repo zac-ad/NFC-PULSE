@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { randomUUID } from 'crypto';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
-import { signedProfileMediaUrl } from '@/lib/profileMedia';
+import { signedProfileMediaPath } from '@/lib/profileMedia';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = new Map([
@@ -82,6 +82,11 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
 
-  const mediaUrl = await signedProfileMediaUrl(path, 3600);
-  return NextResponse.json({ publicUrl: mediaUrl });
+  try {
+    const mediaUrl = await signedProfileMediaPath(path, 3600);
+    return NextResponse.json({ publicUrl: mediaUrl });
+  } catch (error) {
+    console.error('Profile media signed URL creation failed:', error instanceof Error ? error.message : 'Unknown error');
+    return NextResponse.json({ error: 'Image uploaded, but its secure link could not be created. Please try again.' }, { status: 500 });
+  }
 }
