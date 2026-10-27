@@ -109,7 +109,7 @@ export async function POST(request: Request) {
   const cleanSecret = String(activationSecret).trim();
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanName  = String(fullName).trim();
-  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\\s+/g, '-');
+  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
   const cleanType  = String(profileType).toUpperCase();
 
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanSlug)) {
