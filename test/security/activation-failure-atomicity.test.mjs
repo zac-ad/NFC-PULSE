@@ -23,3 +23,13 @@ test("activation atomicity migration leaves function security and permissions un
   assert.doesNotMatch(migration, /SECURITY\s+(?:DEFINER|INVOKER)/i);
   assert.doesNotMatch(migration, /ALTER\s+FUNCTION/i);
 });
+
+
+test("activation failure never deletes an Auth identity that a concurrent retry may be using", () => {
+  const route = read("app/api/activate/route.ts");
+
+  assert.match(route, /retaining the Auth identity for a safe retry/);
+  assert.match(route, /accounts\.auth_user_id ON DELETE SET NULL/);
+  assert.match(route, /Orphan cleanup must be a separate, age-gated reconciliation process/);
+  assert.doesNotMatch(route, /auth\.admin\.deleteUser\(/);
+});
