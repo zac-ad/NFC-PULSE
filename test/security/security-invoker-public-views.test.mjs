@@ -9,8 +9,8 @@ test("public projection views use caller RLS and only receive public base column
 
   assert.match(migration, /create or replace view public\.public_profiles[\s\S]*security_invoker = true/);
   assert.match(migration, /create or replace view public\.public_profile_links[\s\S]*security_invoker = true/);
-  assert.match(migration, /grant select \\([\\s\\S]*full_name[\\s\\S]*profile_type[\\s\\S]*\\)\\s+on table public\\.profiles to anon, authenticated/);
-  assert.match(migration, /grant select \\([\\s\\S]*visibility[\\s\\S]*\\)\\s+on table public\\.profile_links to anon, authenticated/);
+  assert.match(migration, /grant select \([\s\S]*full_name[\s\S]*profile_type[\s\S]*\)\s+on table public\.profiles to anon, authenticated/);
+  assert.match(migration, /grant select \([\s\S]*visibility[\s\S]*\)\s+on table public\.profile_links to anon, authenticated/);
   assert.match(migration, /revoke all privileges on table public\.profiles from anon, authenticated/);
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
 });
