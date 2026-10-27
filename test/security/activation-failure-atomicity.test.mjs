@@ -49,10 +49,10 @@ test("activation validates the card credential before creating or confirming an 
 
 test("card activation preflight is service-role-only and performs no writes", () => {
   const migration = read("supabase/migrations/20261028130000_activation_preflight.sql");
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.validate_card_activation_v1/);
+  assert.ok(migration.includes("CREATE OR REPLACE FUNCTION public.validate_card_activation_v1"));
   assert.match(migration, /SECURITY DEFINER/);
   assert.match(migration, /SET search_path TO ''/);
-  assert.match(migration, /REVOKE ALL ON FUNCTION public\\.validate_card_activation_v1\\(text, text\\) FROM PUBLIC, anon, authenticated/);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\\.validate_card_activation_v1\\(text, text\\) TO service_role/);
-  assert.doesNotMatch(migration, /\\b(?:INSERT|UPDATE|DELETE)\\s+INTO?\\b/i);
+  assert.ok(migration.includes("REVOKE ALL ON FUNCTION public.validate_card_activation_v1(text, text) FROM PUBLIC, anon, authenticated"));
+  assert.ok(migration.includes("GRANT EXECUTE ON FUNCTION public.validate_card_activation_v1(text, text) TO service_role"));
+  assert.doesNotMatch(migration, /\b(?:INSERT|UPDATE|DELETE)\s+INTO?\b/i);
 });
