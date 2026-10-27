@@ -109,7 +109,7 @@ export async function POST(request: Request) {
   const cleanSecret = String(activationSecret).trim();
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanName  = String(fullName).trim();
-  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
+  const cleanSlug  = String(slug).trim().toLowerCase().replace(/\\s+/g, '-');
   const cleanType  = String(profileType).toUpperCase();
 
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanSlug)) {
@@ -162,18 +162,13 @@ export async function POST(request: Request) {
       message.includes('still being removed') ? 409 :
       400;
 
-    // If this request created the Auth user but the DB did not bind it to an
-    // account, remove that unused identity. Never do this after transport errors.
+    // Keep the Auth identity on logical activation failures too. Another
+    // concurrent request may already be using this identity; deleting it here
+    // can trigger accounts.auth_user_id ON DELETE SET NULL after that request
+    // has successfully bound the account. The next retry reuses this identity.
+    // Orphan cleanup must be a separate, age-gated reconciliation process.
     if (authResult.created) {
-      const { data: linkedAccount, error: lookupError } = await supabaseAdmin
-        .from('accounts')
-        .select('id')
-        .eq('auth_user_id', authResult.userId)
-        .maybeSingle();
-      if (!lookupError && !linkedAccount) {
-        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authResult.userId);
-        if (deleteError) console.error('Unused Auth identity cleanup failed:', deleteError.message);
-      }
+      console.warn('Activation did not complete; retaining the Auth identity for a safe retry.');
     }
 
     return NextResponse.json({ error: message }, { status });
