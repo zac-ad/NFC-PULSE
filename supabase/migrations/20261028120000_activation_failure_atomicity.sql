@@ -6,9 +6,9 @@ DECLARE
   v_function_oid oid;
   v_definition text;
   v_old_branch text := $$RETURN json_build_object('error', 'This card was just claimed by someone else. Please try again.');$$;
-  v_new_branch text := $$RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'This card was just claimed by someone else. Please try again.';$$;
+  v_new_branch text := $$RAISE EXCEPTION USING ERRCODE = 'PZ001', MESSAGE = 'This card was just claimed by someone else. Please try again.';$$;
   v_old_handler text := 'WHEN OTHERS THEN';
-  v_new_handler text := $$WHEN SQLSTATE 'P0001' THEN
+  v_new_handler text := $$WHEN SQLSTATE 'PZ001' THEN
       RETURN json_build_object('error', SQLERRM);
     WHEN OTHERS THEN$$;
 BEGIN
