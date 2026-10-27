@@ -33,3 +33,26 @@ test("activation failure never deletes an Auth identity that a concurrent retry 
   assert.match(route, /Orphan cleanup must be a separate, age-gated reconciliation process/);
   assert.doesNotMatch(route, /auth\.admin\.deleteUser\(/);
 });
+
+
+test("activation validates the card credential before creating or confirming an Auth identity", () => {
+  const route = read("app/api/activate/route.ts");
+  const preflight = route.indexOf(".rpc('validate_card_activation_v1'");
+  const ensureAuth = route.indexOf("ensureAuthUser(cleanEmail)");
+  const activation = route.indexOf(".rpc('activate_card_v2'");
+
+  assert.ok(preflight >= 0, "preflight validation RPC must exist");
+  assert.ok(ensureAuth > preflight, "Auth identity must not be created/confirmed before preflight");
+  assert.ok(activation > ensureAuth, "final atomic activation must follow Auth preparation");
+  assert.match(route, /p_activation_secret_hash: hashActivationSecret\(cleanSecret\)/);
+});
+
+test("card activation preflight is service-role-only and performs no writes", () => {
+  const migration = read("supabase/migrations/20261028130000_activation_preflight.sql");
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.validate_card_activation_v1/);
+  assert.match(migration, /SECURITY DEFINER/);
+  assert.match(migration, /SET search_path TO ''/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\\.validate_card_activation_v1\\(text, text\\) FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\\.validate_card_activation_v1\\(text, text\\) TO service_role/);
+  assert.doesNotMatch(migration, /\\b(?:INSERT|UPDATE|DELETE)\\s+INTO?\\b/i);
+});

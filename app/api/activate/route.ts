@@ -122,6 +122,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid profile type.' }, { status: 400 });
   }
 
+  // Validate the card credential before creating or confirming any Auth identity.
+  // The final activation RPC revalidates everything transactionally to handle races.
+  const { data: preflightData, error: preflightError } = await supabaseAdmin.rpc('validate_card_activation_v1', {
+    p_card_code: cleanCode,
+    p_activation_secret_hash: hashActivationSecret(cleanSecret),
+  });
+  if (preflightError) {
+    console.error('Card activation preflight failed:', preflightError.message);
+    return NextResponse.json(
+      { error: 'Could not validate this card. Please try again.' },
+      { status: 503 }
+    );
+  }
+
+  const preflight = preflightData as { success?: boolean; error?: string };
+  if (!preflight || preflight.error || !preflight.success) {
+    const message = preflight?.error || 'Card activation could not be validated. Please try again.';
+    const status =
+      message.includes("couldn't find that card") ? 404 :
+      message.includes('already been activated or is no longer available') ? 409 :
+      message.includes('activation secret') ? 403 :
+      400;
+    return NextResponse.json({ error: message }, { status });
+  }
+
   // Prepare the Auth identity first, then bind that exact identity and the card
   // in the same database transaction through activate_card_v2.
   const authResult = await ensureAuthUser(cleanEmail);
