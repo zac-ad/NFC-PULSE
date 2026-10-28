@@ -13,7 +13,7 @@ create or replace function public.record_card_tap(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 strict
 as $function$
 declare
