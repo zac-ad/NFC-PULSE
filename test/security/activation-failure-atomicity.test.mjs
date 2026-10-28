@@ -52,7 +52,11 @@ test("card activation preflight is service-role-only and performs no writes", ()
   assert.ok(migration.includes("CREATE OR REPLACE FUNCTION public.validate_card_activation_v1"));
   assert.match(migration, /SECURITY DEFINER/);
   assert.match(migration, /SET search_path TO ''/);
-  assert.ok(migration.includes("REVOKE ALL ON FUNCTION public.validate_card_activation_v1(text, text) FROM PUBLIC, anon, authenticated"));
-  assert.ok(migration.includes("GRANT EXECUTE ON FUNCTION public.validate_card_activation_v1(text, text) TO service_role"));
+  assert.ok(migration.includes("REVOKE ALL ON FUNCTION public.validate_card_activation_v1(text, text, text, text, text) FROM PUBLIC, anon, authenticated"));
+  assert.ok(migration.includes("GRANT EXECUTE ON FUNCTION public.validate_card_activation_v1(text, text, text, text, text) TO service_role"));
   assert.doesNotMatch(migration, /\b(?:INSERT|UPDATE|DELETE)\s+INTO?\b/i);
+  assert.match(migration, /p_email text/);
+  assert.match(migration, /p_slug text/);
+  assert.match(migration, /deletion_status/);
+  assert.match(migration, /v_slug_profile\.profile_type IS DISTINCT FROM upper\(trim\(p_profile_type\)\)/);
 });
