@@ -13,6 +13,8 @@ test("tap telemetry uses one atomic database operation", () => {
   assert.doesNotMatch(route, /supabaseAdmin\.rpc\('increment_tap_count'/);
 
   assert.match(migration, /create or replace function public\.record_card_tap/);
+  assert.match(migration, /security definer/i);
+  assert.match(migration, /set search_path\s*=\s*''/i);
   assert.match(migration, /for update/);
   assert.match(migration, /insert into public\.card_taps/);
   assert.match(migration, /update public\.hardware_cards/);
