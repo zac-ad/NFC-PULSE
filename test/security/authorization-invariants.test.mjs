@@ -104,10 +104,11 @@ test("least-privilege migration removes browser write privileges", () => {
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
   assert.match(migration, /grant select on table public\.profile_links to anon, authenticated/);
 });
-test("admin user deletion removes auth identity and fully releases assigned cards", () => {
+test("admin user deletion is resumable and removes the exact Auth identity", () => {
   const source = read("app/api/admin/users/route.ts");
-  assert.match(source, /auth\.admin\.listUsers/);
-  assert.match(source, /auth\.admin\.deleteUser\(authUser\.id\)/);
+  assert.match(source, /deletion_status: 'DELETING'/);
+  assert.match(source, /auth\.admin\.deleteUser\(\s*account\.auth_user_id\s*\)/);
+  assert.doesNotMatch(source, /auth\.admin\.listUsers/);
   assert.match(source, /status: 'UNCLAIMED'/);
   assert.match(source, /profile_id: null/);
   assert.match(source, /tap_count: 0/);
@@ -115,6 +116,7 @@ test("admin user deletion removes auth identity and fully releases assigned card
   assert.match(source, /activation_secret_hash: hashActivationSecret\(activationSecret\)/);
   assert.match(source, /viewer_sessions/);
   assert.match(source, /profile-media/);
+  assert.match(source, /\.eq\('deletion_status', 'DELETING'\)/);
   assert.doesNotMatch(source, /nfc_protection_status:/);
 });
 
