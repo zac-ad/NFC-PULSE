@@ -127,6 +127,9 @@ export async function POST(request: Request) {
   const { data: preflightData, error: preflightError } = await supabaseAdmin.rpc('validate_card_activation_v1', {
     p_card_code: cleanCode,
     p_activation_secret_hash: hashActivationSecret(cleanSecret),
+    p_email: cleanEmail,
+    p_slug: cleanSlug,
+    p_profile_type: cleanType,
   });
   if (preflightError) {
     console.error('Card activation preflight failed:', preflightError.message);
@@ -143,6 +146,9 @@ export async function POST(request: Request) {
       message.includes("couldn't find that card") ? 404 :
       message.includes('already been activated or is no longer available') ? 409 :
       message.includes('activation secret') ? 403 :
+      message.includes('already taken') ||
+      message.includes('still being removed') ||
+      message.includes('already connected to another login identity') ? 409 :
       400;
     return NextResponse.json({ error: message }, { status });
   }
