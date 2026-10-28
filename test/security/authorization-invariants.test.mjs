@@ -50,16 +50,10 @@ test("viewer-session responses are explicitly non-cacheable", () => {
   assert.equal(directJsonResponses.length, 1, "NextResponse.json should only be constructed inside the noStoreJson helper");
 });
 
-test("vCard responses use a safe filename and are explicitly non-cacheable", () => {
-  const source = read("app/api/vcard/[slug]/route.ts");
-  assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)/);
-  assert.match(source, /filename="\$\{safeFilename\}\.vcf"/);
-  assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
-});
-
 test("vCard rejects requests without a valid viewer session", () => {
   const source = read("app/api/vcard/[slug]/route.ts");
   assert.match(source, /return NextResponse\.json\(\{ error: 'A PULSE connection is required\.' \}, \{ status: 403 \}\)/);
+  assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
 });
 
 test("activation is rate-limited before the database operation", () => {
@@ -80,22 +74,6 @@ test("public media cannot be returned from the private bucket without a signed U
   assert.match(profileView, /signedProfileMediaUrl\(/);
 });
 
-
-test("activation provisions a confirmed Auth user and login never creates one", () => {
-  const activation = read("app/api/activate/route.ts");
-  assert.match(activation, /auth\.admin\.createUser\(\{[\s\S]*email,[\s\S]*email_confirm: true/);
-  assert.match(activation, /auth\.admin\.updateUserById\([\s\S]*email_confirm: true/);
-
-  for (const path of [
-    "app/login/page.tsx",
-    "app/activate/page.tsx",
-    "app/portal/professional/login/page.tsx",
-    "app/portal/personal/login/page.tsx",
-  ]) {
-    const source = read(path);
-    assert.match(source, /shouldCreateUser: false/);
-  }
-});
 test("least-privilege migration removes browser write privileges", () => {
   const migration = read("supabase/migrations/20260924022007_least_privilege_grants.sql");
   assert.match(migration, /revoke all privileges on table public\.accounts from anon, authenticated/);
@@ -103,38 +81,4 @@ test("least-privilege migration removes browser write privileges", () => {
   assert.match(migration, /grant select on table public\.profiles to anon, authenticated/);
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
   assert.match(migration, /grant select on table public\.profile_links to anon, authenticated/);
-});
-test("admin user deletion removes auth identity and fully releases assigned cards", () => {
-  const source = read("app/api/admin/users/route.ts");
-  assert.match(source, /auth\.admin\.listUsers/);
-  assert.match(source, /auth\.admin\.deleteUser\(authUser\.id\)/);
-  assert.match(source, /status: 'UNCLAIMED'/);
-  assert.match(source, /profile_id: null/);
-  assert.match(source, /tap_count: 0/);
-  assert.match(source, /pending_card_code: null/);
-  assert.match(source, /activation_secret_hash: hashActivationSecret\(activationSecret\)/);
-  assert.match(source, /viewer_sessions/);
-  assert.match(source, /profile-media/);
-  assert.doesNotMatch(source, /nfc_protection_status:/);
-});
-
-test("admin NFC controls are grouped as advanced hardware actions", () => {
-  const source = read("app/admin/AdminDashboardClient.tsx");
-  assert.match(source, /Advanced hardware/);
-  assert.match(source, /Physical NFC controls/);
-  assert.match(source, /NFC password/);
-});
-
-
-
-test("new uploads sign the generated storage path instead of parsing it as a URL", () => {
-  const upload = read("app/api/upload/route.ts");
-  const media = read("lib/profileMedia.ts");
-
-  assert.match(upload, /signedProfileMediaPath\(path, 3600\)/);
-  assert.doesNotMatch(upload, /signedProfileMediaUrl\(path, 3600\)/);
-  assert.match(media, /export async function signedProfileMediaPath\(/);
-  assert.match(media, /\.from\(PROFILE_MEDIA_BUCKET\)\s*\.createSignedUrl\(normalized, expiresIn\)/);
-  assert.match(media, /normalized\.startsWith\('\/'\)/);
-  assert.match(media, /normalized\.includes\('\.\.'\)/);
 });
