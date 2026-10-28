@@ -68,17 +68,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     const tapIp   = ip;
     const ua      = h.get('user-agent') || '';
 
-    await supabaseAdmin.from('card_taps').insert({
-      card_id:    card.id,
-      profile_id: card.profile_id,
-      ip_address: tapIp,
-      city,
-      region,
-      country,
-      user_agent: ua,
+    const { error: tapRecordError } = await supabaseAdmin.rpc('record_card_tap', {
+      p_card_id: card.id,
+      p_profile_id: card.profile_id,
+      p_ip_address: tapIp,
+      p_city: city,
+      p_region: region,
+      p_country: country,
+      p_user_agent: ua,
     });
 
-    await supabaseAdmin.rpc('increment_tap_count', { card_id: card.id });
+    if (tapRecordError) {
+      console.error('[tap] atomic telemetry recording failed:', tapRecordError.message);
+    }
 
     // ── Viewer session ───────────────────────────────────────────────────────
     // Create a short-lived viewer session server-side. The bearer token is
