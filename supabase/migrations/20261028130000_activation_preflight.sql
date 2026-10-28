@@ -72,7 +72,7 @@ BEGIN
         FROM auth.users
        WHERE id = v_account.auth_user_id;
 
-      IF NOT FOUND OR lower(trim(v_auth_email)) <> lower(trim(p_email)) THEN
+      IF NOT FOUND OR lower(trim(v_auth_email)) IS DISTINCT FROM lower(trim(p_email)) THEN
         RETURN json_build_object('error', 'This email is already connected to another login identity.');
       END IF;
     END IF;
