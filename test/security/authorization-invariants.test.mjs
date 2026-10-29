@@ -53,7 +53,7 @@ test("viewer-session responses are explicitly non-cacheable", () => {
 test("vCard responses use a safe filename and are explicitly non-cacheable", () => {
   const source = read("app/api/vcard/[slug]/route.ts");
   assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)/);
-  assert.match(source, /filename=\\"\$\{safeFilename\}\.vcf\\"/);
+  assert.match(source, /filename="\$\{safeFilename\}\.vcf"/);
   assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
 });
 
@@ -65,7 +65,7 @@ test("vCard rejects requests without a valid viewer session", () => {
 test("activation is rate-limited before the database operation", () => {
   const source = read("app/api/activate/route.ts");
   const rateLimitIndex = source.indexOf("checkRateLimit");
-  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card'");
+  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card_v2'");
   assert.ok(rateLimitIndex >= 0);
   assert.ok(rpcIndex >= 0);
   assert.ok(rateLimitIndex < rpcIndex);
@@ -83,8 +83,8 @@ test("public media cannot be returned from the private bucket without a signed U
 
 test("activation provisions a confirmed Auth user and login never creates one", () => {
   const activation = read("app/api/activate/route.ts");
-  assert.match(activation, /auth\\.admin\\.createUser\\(\\{[\\s\\S]*email,[\\s\\S]*email_confirm: true/);
-  assert.match(activation, /auth\\.admin\\.updateUserById\\([\\s\\S]*email_confirm: true/);
+  assert.match(activation, /auth\.admin\.createUser\(\{[\s\S]*email,[\s\S]*email_confirm: true/);
+  assert.match(activation, /auth\.admin\.updateUserById\([\s\S]*email_confirm: true/);
 
   for (const path of [
     "app/login/page.tsx",
@@ -104,17 +104,24 @@ test("least-privilege migration removes browser write privileges", () => {
   assert.match(migration, /revoke all privileges on table public\.profile_links from anon, authenticated/);
   assert.match(migration, /grant select on table public\.profile_links to anon, authenticated/);
 });
-test("admin user deletion removes auth identity and fully releases assigned cards", () => {
+test("admin user deletion is resumable and removes the exact Auth identity", () => {
   const source = read("app/api/admin/users/route.ts");
-  assert.match(source, /auth\.admin\.listUsers/);
-  assert.match(source, /auth\.admin\.deleteUser\(authUser\.id\)/);
+  assert.match(source, /deletion_status: 'DELETING'/);
+  assert.match(source, /\.eq\('deletion_status', 'ACTIVE'\)[\s\S]*?\.select\('id'\)[\s\S]*?\.maybeSingle\(\)/);
+  assert.match(source, /latestAccount\?\.deletion_status !== 'DELETING'/);
+  assert.match(source, /if \(!deletedAccount\)/);
+  assert.match(source, /\.eq\('deletion_status', 'DELETING'\)[\s\S]*?\.select\('id'\)[\s\S]*?\.maybeSingle\(\)/);
+  assert.match(source, /auth\.admin\.deleteUser\(\s*account\.auth_user_id\s*\)/);
+  assert.doesNotMatch(source, /auth\.admin\.listUsers/);
   assert.match(source, /status: 'UNCLAIMED'/);
   assert.match(source, /profile_id: null/);
+  assert.match(source, /\.in\('profile_id', profileIds\)/);
   assert.match(source, /tap_count: 0/);
   assert.match(source, /pending_card_code: null/);
   assert.match(source, /activation_secret_hash: hashActivationSecret\(activationSecret\)/);
   assert.match(source, /viewer_sessions/);
   assert.match(source, /profile-media/);
+  assert.match(source, /\.eq\('deletion_status', 'DELETING'\)/);
   assert.doesNotMatch(source, /nfc_protection_status:/);
 });
 
@@ -137,4 +144,15 @@ test("new uploads sign the generated storage path instead of parsing it as a URL
   assert.match(media, /\.from\(PROFILE_MEDIA_BUCKET\)\s*\.createSignedUrl\(normalized, expiresIn\)/);
   assert.match(media, /normalized\.startsWith\('\/'\)/);
   assert.match(media, /normalized\.includes\('\.\.'\)/);
+});
+
+
+test("activation binds the card to the exact Supabase Auth identity", () => {
+  const route = read("app/api/activate/route.ts");
+  assert.match(route, /ensureAuthUser\(cleanEmail\)/);
+  assert.match(route, /rpc\('activate_card_v2'/);
+  assert.match(route, /p_auth_user_id:\s*authResult\.userId/);
+  assert.doesNotMatch(route, /rpc\('activate_card',/);
+  assert.match(route, /Do not delete a newly created Auth identity on transport failure/);
+  assert.match(route, /auth\.admin\.listUsers\(\{ page, perPage: 1000 \}\)/);
 });

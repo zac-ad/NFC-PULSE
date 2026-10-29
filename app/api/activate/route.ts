@@ -1,12 +1,12 @@
 // app/api/activate/route.ts
 //
-// Activation API — calls the activate_card() Postgres function which
-// performs all writes (account, profile, card binding) in one atomic
-// transaction. If anything fails mid-way, Postgres rolls everything
-// back. No partial state, no orphaned accounts.
-//
-// The actual business logic lives in:
-//   supabase/migrations/0003_atomic_activation.sql
+// Activation API — validates the card, prepares its Supabase Auth identity,
+// then calls public.activate_card_v2 for the atomic PostgreSQL account/profile/card
+// writes. Auth and PostgreSQL cannot share a transaction, so an ambiguous failure
+// may leave an Auth identity behind; we retain it for safe retries rather than
+// risk deleting an identity another concurrent activation has already bound.
+// The account/Auth lifecycle function is defined in
+// supabase/migrations/20261002071402_account_auth_lifecycle.sql.
 //
 // This route only handles:
 //   - Input sanitisation before passing to the function
@@ -18,54 +18,53 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashActivationSecret } from '@/lib/activationSecret';
 
-async function ensureAuthUser(email: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+type AuthUserResult =
+  | { ok: true; userId: string; created: boolean }
+  | { ok: false; error: string };
+
+async function ensureAuthUser(email: string): Promise<AuthUserResult> {
+  const { data: createdData, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true,
   });
 
-  if (!createError) return { ok: true };
+  if (!createError && createdData.user) {
+    return { ok: true, userId: createdData.user.id, created: true };
+  }
 
-  // A retry or an already-existing PULSE account should not fail activation.
-  // Only fall back to lookup for the expected duplicate-user condition.
-  const duplicate = /already registered|already exists|user already/i.test(createError.message);
-  if (!duplicate) {
-    console.error('Auth user creation failed:', createError.message);
+  if (!createError || !/already registered|already exists|user already/i.test(createError.message)) {
+    console.error('Auth user creation failed:', createError?.message || 'No user returned');
     return { ok: false, error: 'Could not prepare your login account. Please try again.' };
   }
 
-  const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
+  // Page through Auth users rather than silently limiting lookup to the first 1,000.
+  for (let page = 1; page <= 100; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) {
+      console.error('Auth user lookup failed:', error.message);
+      return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+    }
 
-  if (listError) {
-    console.error('Auth user lookup failed:', listError.message);
-    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+    const existing = data.users.find(user => user.email?.trim().toLowerCase() === email);
+    if (existing) {
+      if (!existing.email_confirmed_at) {
+        const { data: confirmed, error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+          existing.id,
+          { email_confirm: true }
+        );
+        if (confirmError || !confirmed.user) {
+          console.error('Auth user confirmation failed:', confirmError?.message || 'No user returned');
+          return { ok: false, error: 'Could not prepare your login account. Please try again.' };
+        }
+      }
+      return { ok: true, userId: existing.id, created: false };
+    }
+
+    if (data.users.length < 1000) break;
   }
 
-  const existingUser = usersData.users.find(
-    user => user.email?.trim().toLowerCase() === email
-  );
-
-  if (!existingUser) {
-    console.error('Auth user exists error but matching user was not found.');
-    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
-  }
-
-  if (existingUser.email_confirmed_at) return { ok: true };
-
-  const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
-    existingUser.id,
-    { email_confirm: true }
-  );
-
-  if (confirmError) {
-    console.error('Auth user confirmation failed:', confirmError.message);
-    return { ok: false, error: 'Could not prepare your login account. Please try again.' };
-  }
-
-  return { ok: true };
+  console.error('Auth user exists error but matching user was not found after paginated lookup.');
+  return { ok: false, error: 'Could not prepare your login account. Please try again.' };
 }
 
 export async function POST(request: Request) {
@@ -113,6 +112,11 @@ export async function POST(request: Request) {
   const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
   const cleanType  = String(profileType).toUpperCase();
 
+  // Reject whitespace-only names before preflight or any Auth identity mutation.
+  if (!cleanName) {
+    return NextResponse.json({ error: 'Full name is required.' }, { status: 400 });
+  }
+
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanSlug)) {
     return NextResponse.json(
       { error: 'PULSE link can only contain lowercase letters, numbers, and hyphens.' },
@@ -123,54 +127,87 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid profile type.' }, { status: 400 });
   }
 
-  // Call the atomic Postgres function.
-  // activate_card() always returns a JSON object with either:
-  //   { success: true, slug, profile_id, account_id }
-  //   { error: "human readable message" }
-  //
-  // It never throws — all exceptions are caught inside the function
-  // and returned as { error: "..." } — so we only need to handle the
-  // case where the RPC call itself fails (network, Supabase outage).
-  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card', {
-    p_card_code:    cleanCode,
+  // Validate the card credential before creating or confirming any Auth identity.
+  // The final activation RPC revalidates everything transactionally to handle races.
+  const { data: preflightData, error: preflightError } = await supabaseAdmin.rpc('validate_card_activation_v1', {
+    p_card_code: cleanCode,
     p_activation_secret_hash: hashActivationSecret(cleanSecret),
-    p_email:        cleanEmail,
-    p_full_name:    cleanName,
-    p_slug:         cleanSlug,
+    p_email: cleanEmail,
+    p_slug: cleanSlug,
     p_profile_type: cleanType,
   });
-
-  if (rpcError) {
-    // RPC transport failure — the function didn't run at all.
-    console.error('activate_card RPC error:', rpcError.message);
+  if (preflightError) {
+    console.error('Card activation preflight failed:', preflightError.message);
     return NextResponse.json(
-      { error: 'Could not reach the database. Please try again.' },
+      { error: 'Could not validate this card. Please try again.' },
       { status: 503 }
     );
   }
 
-  // The function ran — check its returned JSON for success or error.
-  const result = data as { success?: boolean; error?: string; slug?: string };
-
-  if (result.error) {
-    // Determine the right HTTP status from the error content.
+  const preflight = preflightData as { success?: boolean; error?: string };
+  if (!preflight || preflight.error || !preflight.success) {
+    const message = preflight?.error || 'Card activation could not be validated. Please try again.';
     const status =
-      result.error.includes('already been activated') ? 409 :
-      result.error.includes('activation secret') ? 403 :
-      result.error.includes('PULSE link is already taken') ? 409 :
-      result.error.includes('couldn\'t find that card') ? 404 :
-      result.error.includes('being activated right now') ? 409 :
+      message.includes("couldn't find that card") ? 404 :
+      message.includes('already been activated or is no longer available') ? 409 :
+      message.includes('activation secret') ? 403 :
+      message.includes('already taken') ||
+      message.includes('still being removed') ||
+      message.includes('already connected to another login identity') ? 409 :
       400;
-
-    return NextResponse.json({ error: result.error }, { status });
+    return NextResponse.json({ error: message }, { status });
   }
 
-  // Activation creates the PULSE account/profile in Postgres. Supabase Auth is
-  // kept separate, so create and auto-confirm the passwordless login identity
-  // before sending the sign-in link from the activation page.
+  // Prepare the Auth identity first, then bind that exact identity and the card
+  // in the same database transaction through activate_card_v2.
   const authResult = await ensureAuthUser(cleanEmail);
   if (!authResult.ok) {
     return NextResponse.json({ error: authResult.error }, { status: 503 });
+  }
+
+  const { data, error: rpcError } = await supabaseAdmin.rpc('activate_card_v2', {
+    p_card_code: cleanCode,
+    p_activation_secret_hash: hashActivationSecret(cleanSecret),
+    p_email: cleanEmail,
+    p_full_name: cleanName,
+    p_slug: cleanSlug,
+    p_profile_type: cleanType,
+    p_auth_user_id: authResult.userId,
+  });
+
+  if (rpcError) {
+    // Do not delete a newly created Auth identity on transport failure: the
+    // database transaction may have committed even if the response was lost.
+    // A retry can safely reuse the identity and reconcile the account.
+    console.error('activate_card_v2 RPC error:', rpcError.message);
+    return NextResponse.json(
+      { error: 'Could not complete activation. Please try again.' },
+      { status: 503 }
+    );
+  }
+
+  const result = data as { success?: boolean; error?: string; slug?: string };
+  if (!result || result.error || !result.success) {
+    const message = result?.error || 'Activation could not be completed. Please try again.';
+    const status =
+      message.includes('already been activated') ? 409 :
+      message.includes('activation secret') ? 403 :
+      message.includes('PULSE link is already taken') || message.includes('already connected') ? 409 :
+      message.includes("couldn't find that card") ? 404 :
+      message.includes('being activated right now') ? 409 :
+      message.includes('still being removed') ? 409 :
+      400;
+
+    // Keep the Auth identity on logical activation failures too. Another
+    // concurrent request may already be using this identity; deleting it here
+    // can trigger accounts.auth_user_id ON DELETE SET NULL after that request
+    // has successfully bound the account. The next retry reuses this identity.
+    // Orphan cleanup must be a separate, age-gated reconciliation process.
+    if (authResult.created) {
+      console.warn('Activation did not complete; retaining the Auth identity for a safe retry.');
+    }
+
+    return NextResponse.json({ error: message }, { status });
   }
 
   return NextResponse.json({ success: true, slug: result.slug });
