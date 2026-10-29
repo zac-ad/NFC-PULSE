@@ -16,6 +16,20 @@ on:
 jobs:
   authorization-regression:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pulse_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pulse_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,3 +41,13 @@ jobs:
 
       - name: Run authorization regression tests
         run: node --test test/**/*.test.mjs
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Run activation rollback integration test on disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pulse_test
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f test/sql/activation-failure-atomicity.integration.sql
