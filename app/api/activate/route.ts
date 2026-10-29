@@ -1,12 +1,12 @@
 // app/api/activate/route.ts
 //
-// Activation API — calls the activate_card() Postgres function which
-// performs all writes (account, profile, card binding) in one atomic
-// transaction. If anything fails mid-way, Postgres rolls everything
-// back. No partial state, no orphaned accounts.
-//
-// The actual business logic lives in:
-//   supabase/migrations/0003_atomic_activation.sql
+// Activation API — validates the card, prepares its Supabase Auth identity,
+// then calls public.activate_card_v2 for the atomic PostgreSQL account/profile/card
+// writes. Auth and PostgreSQL cannot share a transaction, so an ambiguous failure
+// may leave an Auth identity behind; we retain it for safe retries rather than
+// risk deleting an identity another concurrent activation has already bound.
+// The account/Auth lifecycle function is defined in
+// supabase/migrations/20261002071402_account_auth_lifecycle.sql.
 //
 // This route only handles:
 //   - Input sanitisation before passing to the function
