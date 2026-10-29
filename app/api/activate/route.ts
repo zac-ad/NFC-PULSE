@@ -112,6 +112,11 @@ export async function POST(request: Request) {
   const cleanSlug  = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
   const cleanType  = String(profileType).toUpperCase();
 
+  // Reject whitespace-only names before preflight or any Auth identity mutation.
+  if (!cleanName) {
+    return NextResponse.json({ error: 'Full name is required.' }, { status: 400 });
+  }
+
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanSlug)) {
     return NextResponse.json(
       { error: 'PULSE link can only contain lowercase letters, numbers, and hyphens.' },

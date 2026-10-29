@@ -65,3 +65,17 @@ test("activation rate limiter fails closed when its database check fails", () =>
   assert.match(source, /if \(error\)/);
   assert.match(source, /return false/);
 });
+
+test("activation rejects whitespace-only names before preflight or Auth provisioning", () => {
+  const source = read("app/api/activate/route.ts");
+  const normalizeName = source.indexOf("const cleanName  = String(fullName).trim()");
+  const rejectEmptyName = source.indexOf("if (!cleanName)");
+  const preflight = source.indexOf(".rpc('validate_card_activation_v1'");
+  const ensureAuth = source.indexOf("ensureAuthUser(cleanEmail)");
+
+  assert.ok(normalizeName >= 0, "name must be normalized");
+  assert.ok(rejectEmptyName > normalizeName, "empty normalized names must be rejected");
+  assert.ok(preflight > rejectEmptyName, "name validation must precede preflight");
+  assert.ok(ensureAuth > rejectEmptyName, "name validation must precede Auth provisioning");
+  assert.match(source, /if \(!cleanName\)\s*\{\s*return NextResponse\.json\(\{ error: 'Full name is required\.' \}, \{ status: 400 \}\);/);
+});
