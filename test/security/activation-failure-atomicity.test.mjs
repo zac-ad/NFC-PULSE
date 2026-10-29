@@ -59,4 +59,7 @@ test("card activation preflight is service-role-only and performs no writes", ()
   assert.match(migration, /p_slug text/);
   assert.match(migration, /deletion_status/);
   assert.match(migration, /v_slug_profile\.profile_type IS DISTINCT FROM upper\(trim\(p_profile_type\)\)/);
+  assert.match(migration, /JOIN public\.accounts AS linked_account/);
+  assert.match(migration, /linked_account\.auth_user_id = auth_user\.id/);
+  assert.match(migration, /lower\(trim\(linked_account\.email\)\) <> lower\(trim\(p_email\)\)/);
 });

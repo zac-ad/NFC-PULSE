@@ -54,6 +54,20 @@ BEGIN
     RETURN json_build_object('error', 'The activation secret is invalid.');
   END IF;
 
+  -- An Auth user with this email may already be bound to an account whose
+  -- stored email differs (for example, after an out-of-band Auth email change).
+  -- Reject that deterministic conflict before the route prepares the identity.
+  IF EXISTS (
+    SELECT 1
+      FROM auth.users AS auth_user
+      JOIN public.accounts AS linked_account
+        ON linked_account.auth_user_id = auth_user.id
+     WHERE lower(trim(auth_user.email)) = lower(trim(p_email))
+       AND lower(trim(linked_account.email)) <> lower(trim(p_email))
+  ) THEN
+    RETURN json_build_object('error', 'This login identity is already connected to another PULSE account.');
+  END IF;
+
   -- Reject account lifecycle and identity mismatches before Auth mutation.
   SELECT id, auth_user_id, deletion_status
     INTO v_account
