@@ -38,15 +38,46 @@ export async function DELETE(request: Request) {
 
   // Make the operation explicitly resumable before touching any dependent data.
   if (account.deletion_status !== 'DELETING') {
-    const { error: markDeletingError } = await supabaseAdmin
+    if (account.deletion_status !== 'ACTIVE') {
+      return NextResponse.json(
+        { error: 'Account is not in a deletable state. Please verify its status before retrying.' },
+        { status: 409 }
+      );
+    }
+
+    const { data: markedAccount, error: markDeletingError } = await supabaseAdmin
       .from('accounts')
       .update({ deletion_status: 'DELETING' })
       .eq('id', account_id)
-      .eq('deletion_status', 'ACTIVE');
+      .eq('deletion_status', 'ACTIVE')
+      .select('id')
+      .maybeSingle();
 
     if (markDeletingError) {
       console.error('[admin/users DELETE] mark deleting:', markDeletingError.message);
       return NextResponse.json({ error: 'Could not start account deletion.' }, { status: 500 });
+    }
+
+    // Another request may have changed the state after our initial read. Do not
+    // continue unless the account is now explicitly DELETING.
+    if (!markedAccount) {
+      const { data: latestAccount, error: latestAccountError } = await supabaseAdmin
+        .from('accounts')
+        .select('deletion_status')
+        .eq('id', account_id)
+        .maybeSingle();
+
+      if (latestAccountError) {
+        console.error('[admin/users DELETE] verify deletion state:', latestAccountError.message);
+        return NextResponse.json({ error: 'Could not verify account deletion state.' }, { status: 500 });
+      }
+
+      if (latestAccount?.deletion_status !== 'DELETING') {
+        return NextResponse.json(
+          { error: 'Account state changed before deletion could start. Please refresh and retry.' },
+          { status: 409 }
+        );
+      }
     }
   }
 
@@ -171,17 +202,26 @@ export async function DELETE(request: Request) {
     }
   }
 
-  const { error: accountDeleteError } = await supabaseAdmin
+  const { data: deletedAccount, error: accountDeleteError } = await supabaseAdmin
     .from('accounts')
     .delete()
     .eq('id', account_id)
-    .eq('deletion_status', 'DELETING');
+    .eq('deletion_status', 'DELETING')
+    .select('id')
+    .maybeSingle();
 
   if (accountDeleteError) {
     console.error('[admin/users DELETE] account deletion:', accountDeleteError.message);
     return NextResponse.json(
       { error: 'The login and cards were cleaned up, but the PULSE account record could not be removed. Please retry.' },
       { status: 500 }
+    );
+  }
+
+  if (!deletedAccount) {
+    return NextResponse.json(
+      { error: 'The account was not removed because its deletion state changed. Please refresh and verify before retrying.' },
+      { status: 409 }
     );
   }
 
