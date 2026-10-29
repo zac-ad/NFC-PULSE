@@ -193,7 +193,7 @@ export async function DELETE(request: Request) {
         })
         .eq('id', card.id)
         .eq('status', 'ACTIVE')
-        .not('profile_id', 'is', null);
+        .in('profile_id', profileIds);
 
       if (releaseError) {
         console.error('[admin/users DELETE] card release:', releaseError.message);
