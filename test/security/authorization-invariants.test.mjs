@@ -107,10 +107,10 @@ test("least-privilege migration removes browser write privileges", () => {
 test("admin user deletion is resumable and removes the exact Auth identity", () => {
   const source = read("app/api/admin/users/route.ts");
   assert.match(source, /deletion_status: 'DELETING'/);
-  assert.match(source, /\\.eq\\('deletion_status', 'ACTIVE'\\)[\\s\\S]*?\\.select\\('id'\\)[\\s\\S]*?\\.maybeSingle\\(\\)/);
-  assert.match(source, /latestAccount\\?\\.deletion_status !== 'DELETING'/);
-  assert.match(source, /if \\(!deletedAccount\\)/);
-  assert.match(source, /\\.eq\\('deletion_status', 'DELETING'\\)[\\s\\S]*?\\.select\\('id'\\)[\\s\\S]*?\\.maybeSingle\\(\\)/);
+  assert.match(source, /\.eq\('deletion_status', 'ACTIVE'\)[\s\S]*?\.select\('id'\)[\s\S]*?\.maybeSingle\(\)/);
+  assert.match(source, /latestAccount\?\.deletion_status !== 'DELETING'/);
+  assert.match(source, /if \(!deletedAccount\)/);
+  assert.match(source, /\.eq\('deletion_status', 'DELETING'\)[\s\S]*?\.select\('id'\)[\s\S]*?\.maybeSingle\(\)/);
   assert.match(source, /auth\.admin\.deleteUser\(\s*account\.auth_user_id\s*\)/);
   assert.doesNotMatch(source, /auth\.admin\.listUsers/);
   assert.match(source, /status: 'UNCLAIMED'/);
