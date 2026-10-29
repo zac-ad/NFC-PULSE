@@ -115,6 +115,7 @@ test("admin user deletion is resumable and removes the exact Auth identity", () 
   assert.doesNotMatch(source, /auth\.admin\.listUsers/);
   assert.match(source, /status: 'UNCLAIMED'/);
   assert.match(source, /profile_id: null/);
+  assert.match(source, /\.in\('profile_id', profileIds\)/);
   assert.match(source, /tap_count: 0/);
   assert.match(source, /pending_card_code: null/);
   assert.match(source, /activation_secret_hash: hashActivationSecret\(activationSecret\)/);
