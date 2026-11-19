@@ -206,6 +206,7 @@ $preflight_assertions$;
 -- Exercise the atomicity migration against the disposable fixture function.
 \i supabase/migrations/20261028120000_activation_failure_atomicity.sql
 \i supabase/migrations/20261028140000_activation_identity_binding.sql
+\i supabase/migrations/20261119110000_activation_final_slug_profile_type.sql
 
 -- Test-only trigger simulates a late conditional card update that affects zero rows.
 -- The real activation function has already created/updated the account and profile
@@ -266,6 +267,24 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.accounts WHERE email = 'different@example.invalid')
      OR EXISTS (SELECT 1 FROM public.profiles WHERE slug = 'identity-mismatch') THEN
     RAISE EXCEPTION 'Identity-binding rejection left account/profile writes behind';
+  END IF;
+
+  -- The final transaction must reject a slug owned by this account's other profile type.
+  v_result := public.activate_card_v2(
+    'ATOMIC-SUCCESS', 'hash-success', 'good@example.invalid',
+    'Good User', 'same-account-personal', 'PROFESSIONAL',
+    '00000000-0000-0000-0000-000000000001'::uuid
+  );
+  IF v_result->>'error' <> 'That PULSE link is already taken. Try a different one.' THEN
+    RAISE EXCEPTION 'Final activation did not reject same-account cross-profile-type slug reuse, got: %', v_result;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.profiles
+     WHERE account_id = '10000000-0000-0000-0000-000000000001'
+       AND profile_type = 'PROFESSIONAL'
+       AND slug = 'same-account-personal'
+  ) THEN
+    RAISE EXCEPTION 'Cross-profile-type slug rejection created or changed a profile';
   END IF;
 
   -- The actual production activation function now reaches its late card update.
