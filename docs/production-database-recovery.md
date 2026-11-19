@@ -63,9 +63,16 @@ If a command fails, stop and preserve the error. Do not proceed with a partial e
 
 ## 4. Separate Auth and Storage recovery work
 
-The CLI dump above explicitly does not back up the managed `auth` or `storage` schemas. Do not try to restore Supabase-managed schemas by blindly importing their tables into another Supabase project.
+The standard CLI logical dump procedure in Section 3 does not by itself provide a complete managed Auth or Storage recovery package. Supabase's current migration guidance describes separate handling for Auth schema data, customizations inside managed schemas, and Storage objects. Do not assume the standard dump covers these items, and do not blindly import managed schemas into another live project.
 
-For Auth, separately document the supported account recovery/export options available for the project and verify what can actually be restored. Do not export password hashes or authentication secrets into an ordinary file, and do not assume that a list of user IDs/emails is enough to restore working sign-in identities. Supabase Auth user records are not safely recreated by importing a list of IDs and emails.
+For Auth, do not treat a CSV of users as a recoverable Auth backup. Supabase documents that `auth.users` and `auth.identities` can be queried/exported, and its Auth migration guidance describes migrating the Auth schema (including users and hashed passwords) using a full database backup or PostgreSQL export/import. That is materially different from exporting user IDs and emails.
+
+For a manual recovery path, the supported Supabase CLI logical dump above is not sufficient by itself to prove Auth recovery. Before relying on a separate Auth-schema export, verify the exact production Auth objects and PostgreSQL version, determine whether the current database role can read and dump all required Auth objects, and test restoring them into a disposable Supabase project/database of a compatible platform version. Do not blindly import managed Auth tables into an existing live project. Do not put the dump in Git or an ordinary unencrypted folder; it contains sensitive identity data and password hashes. Keep it encrypted and access-restricted. Record the exact export command, included schemas/objects, restore procedure, and test outcome. If this cannot be completed safely, Auth recovery remains an explicit gap and the full-project backup gate remains blocked.
+
+Official guidance:
+- Auth user export: https://supabase.com/docs/guides/auth/managing-user-data
+- Auth schema migration: https://supabase.com/kb/troubleshooting/migrating-auth-users-between-projects
+- CLI backup/restore and managed-schema customizations: https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore
 
 ### Storage object export (Windows PowerShell)
 
@@ -91,7 +98,7 @@ The source URI is the remote bucket; the destination is a local directory. Do no
 
 For a separate destination project restore, the CLI's Storage copy command uploads a local directory into a bucket; do not point that command at production during a backup exercise.
 
-Also record how deployed Edge Functions, environment secrets, redirect URLs, authentication provider settings, and other required project configuration would be recreated. Never put secret values in the runbook or Git.
+Also record how deployed Edge Functions, environment secrets, redirect URLs, authentication provider settings, and other required project configuration would be recreated. Supabase documents CLI commands for listing/downloading Edge Functions; function secrets and project settings still need a separate secure inventory and recreation plan. Never put secret values in the runbook or Git.
 
 If any required Auth, Storage, or platform recovery path is unknown, the full-project backup gate remains blocked.
 
