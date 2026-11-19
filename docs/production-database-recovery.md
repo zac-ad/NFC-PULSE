@@ -65,9 +65,31 @@ If a command fails, stop and preserve the error. Do not proceed with a partial e
 
 The CLI dump above explicitly does not back up the managed `auth` or `storage` schemas. Do not try to restore Supabase-managed schemas by blindly importing their tables into another Supabase project.
 
-For Auth, separately document the supported account recovery/export options available for the project and verify what can actually be restored. Do not export password hashes or authentication secrets into an ordinary file, and do not assume that a list of user IDs/emails is enough to restore working sign-in identities.
+For Auth, separately document the supported account recovery/export options available for the project and verify what can actually be restored. Do not export password hashes or authentication secrets into an ordinary file, and do not assume that a list of user IDs/emails is enough to restore working sign-in identities. Supabase Auth user records are not safely recreated by importing a list of IDs and emails.
 
-For Storage, create a separate inventory of the `profile-media` bucket and copy every object to a private backup location using an authorized Storage download workflow. Preserve each object's bucket-relative path and verify the copied file count and hashes. A row in `storage.objects` is metadata; it is not the uploaded file itself. Do not make the bucket public to simplify backup.
+### Storage object export (Windows PowerShell)
+
+The official Supabase CLI supports listing and copying remote Storage objects. On the trusted computer, authenticate with the Supabase CLI and use the project ref explicitly. The commands below use the current CLI's experimental Storage commands; check `supabase storage cp --help` if the installed CLI reports a syntax change.
+
+```powershell
+supabase login
+supabase storage ls ss:///profile-media --recursive --experimental --remote=gxbpahfmwfhsyzeovkqu
+if ($LASTEXITCODE -ne 0) { throw "Remote Storage listing failed" }
+
+$StorageBackup = Join-Path $BackupDir "profile-media"
+New-Item -ItemType Directory -Path $StorageBackup | Out-Null
+
+supabase storage cp ss:///profile-media "$StorageBackup" --recursive --experimental --remote=gxbpahfmwfhsyzeovkqu
+if ($LASTEXITCODE -ne 0) { throw "Storage object copy failed" }
+
+$Files = Get-ChildItem -LiteralPath $StorageBackup -File -Recurse
+$Files.Count
+$Files | Get-FileHash -Algorithm SHA256 | Export-Csv -NoTypeInformation -Path (Join-Path $BackupDir "storage-sha256.csv")
+```
+
+The source URI is the remote bucket; the destination is a local directory. Do not use `storage mv` or `storage rm` for backup. Compare the downloaded object paths and count with the Storage listing and the production metadata inventory. At the 2026-11-19 inspection, `profile-media` was private and had 23 object records (10 PNG, 11 JPEG, 2 GIF; approximately 5.18 MB from metadata). Re-check the live count before export because it can change. Preserve the relative paths exactly. A successful copy command alone is not proof: verify all files exist and hashes are recorded.
+
+For a separate destination project restore, the CLI's Storage copy command uploads a local directory into a bucket; do not point that command at production during a backup exercise.
 
 Also record how deployed Edge Functions, environment secrets, redirect URLs, authentication provider settings, and other required project configuration would be recreated. Never put secret values in the runbook or Git.
 
