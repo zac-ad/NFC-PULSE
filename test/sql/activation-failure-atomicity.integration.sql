@@ -49,7 +49,7 @@ INSERT INTO public.accounts(id, email) VALUES
   ('10000000-0000-0000-0000-000000000005', 'old-email@example.invalid');
 
 -- Exercise the real account/Auth lifecycle migration from the pre-lifecycle schema.
-\\i supabase/migrations/20261002071402_account_auth_lifecycle.sql
+\i supabase/migrations/20261002071402_account_auth_lifecycle.sql
 
 DO $lifecycle_assertions$
 DECLARE
