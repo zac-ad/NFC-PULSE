@@ -118,6 +118,15 @@ This inventory is metadata only. It does not back up the values of environment v
 
 For the Supabase project dashboard, separately record (without secret values) Auth URL configuration, redirect allow-list, enabled identity providers, email/SMTP settings, rate limits, CAPTCHA settings if used, custom domains, API settings, and any other project-level configuration needed to recreate sign-in and callbacks. The current connected Supabase actions do not expose a complete Auth/provider settings export, so this part still requires a manual dashboard inventory and restore test. Record which settings are unavailable or cannot be recreated.
 
+The live Supabase project inventory on 2026-11-19 also confirmed:
+- Project status: `ACTIVE_HEALTHY`.
+- Region: `ap-southeast-2`.
+- PostgreSQL: `17.11.0.003` (major version 17).
+- Installed extensions reported by the database extension inventory: `supabase_vault` in schema `vault`, `uuid-ossp` and `pgcrypto` in schema `extensions`, `plpgsql` in `pg_catalog`, and `pg_stat_statements` in `extensions`.
+- The migration history contains 19 recorded migrations; the latest recorded version is `20261002071402` (`account_auth_lifecycle`). This is an inventory only; do not replay recorded migrations as part of recovery.
+
+The extension API also lists many available-but-not-installed extensions. Do not install them during restore simply because they appear in that catalogue. Recreate only extensions confirmed installed in the source project, using compatible versions and schemas, then verify application behavior.
+
 The project and environment inventories above are point-in-time observations. Re-run them immediately before the backup and store the results in the private operations record, not in a public repository if they reveal operational details.
 
 ## 6. Restore rehearsal
