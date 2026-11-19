@@ -102,7 +102,25 @@ Also record how deployed Edge Functions, environment secrets, redirect URLs, aut
 
 If any required Auth, Storage, or platform recovery path is unknown, the full-project backup gate remains blocked.
 
-## 5. Restore rehearsal
+## 5. Edge Functions, Vercel environment, and project configuration inventory
+
+A read-only connector inventory on 2026-11-19 returned **zero deployed Supabase Edge Functions** for project `gxbpahfmwfhsyzeovkqu`. Re-run the function inventory before a release; if functions are added later, list each function name, source revision, entrypoint, import map, runtime settings, and JWT verification setting. Keep the source in Git and retain any non-repository deployment configuration separately. Do not assume an empty inventory will remain empty.
+
+The Vercel project inventory for `nfc-pulse` (team `vounty`) returned:
+- Framework: Next.js; configured Node.js version: 24.x.
+- Domains: `nfc-pulse-wine.vercel.app`, `nfc-pulse-vounty.vercel.app`, and `nfc-pulse-git-main-vounty.vercel.app`.
+- Password protection: disabled.
+- SSO protection: enabled for deployments except custom domains.
+- Trusted IP restrictions: disabled.
+- Environment variable inventory: 15 entries across production, preview, and development; zero hidden production variables reported. Names observed (values intentionally not read or recorded): `NEXT_PUBLIC_SITE_URL`, `ORG_SESSION_SECRET`, `ADMIN_SESSION_SECRET`, `SESSION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSPHRASE`, `RESEND_API_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SUPABASE_URL`. Some names have separate environment-target entries.
+
+This inventory is metadata only. It does not back up the values of environment variables, Vercel project settings, Git connection, domains/DNS, deployment protection configuration, or third-party provider configuration. Do not decrypt or print secrets into this runbook. Before release, create a private configuration recovery record that identifies each required variable by name and target, verifies that its value is available through its authoritative secret manager, and documents how to re-enter it into a replacement project. Do not copy secret values into Git, chat, or ordinary files.
+
+For the Supabase project dashboard, separately record (without secret values) Auth URL configuration, redirect allow-list, enabled identity providers, email/SMTP settings, rate limits, CAPTCHA settings if used, custom domains, API settings, and any other project-level configuration needed to recreate sign-in and callbacks. The current connected Supabase actions do not expose a complete Auth/provider settings export, so this part still requires a manual dashboard inventory and restore test. Record which settings are unavailable or cannot be recreated.
+
+The project and environment inventories above are point-in-time observations. Re-run them immediately before the backup and store the results in the private operations record, not in a public repository if they reveal operational details.
+
+## 6. Restore rehearsal
 
 Use an isolated local PostgreSQL 17 environment or another approved disposable environment. Never test restoration against production.
 
@@ -115,7 +133,7 @@ Use an isolated local PostgreSQL 17 environment or another approved disposable e
 
 A successful PostgreSQL restore alone does not prove that a full Supabase project can be recovered.
 
-## 6. Backup acceptance checklist
+## 7. Backup acceptance checklist
 
 Before a production migration, record and verify all of the following:
 
@@ -134,7 +152,7 @@ Before a production migration, record and verify all of the following:
 
 If a complete managed-project recovery path cannot be confirmed, keep the activation release on hold. If Supabase-managed Auth cannot be independently restored, explicitly record that limitation; do not claim a full disaster-recovery backup.
 
-## 7. Migration release procedure
+## 8. Migration release procedure
 
 For the pending activation release:
 
@@ -149,7 +167,7 @@ For the pending activation release:
 6. Run activation smoke tests using a dedicated test card/account, not a customer card.
 7. If a migration fails, stop. Do not continue to the next migration or manually edit migration history.
 
-## 8. Recovery principles
+## 9. Recovery principles
 
 - Prefer a tested forward corrective migration for function or schema changes.
 - Do not delete rows from Supabase migration history to pretend a migration did not run.
@@ -158,7 +176,7 @@ For the pending activation release:
 - Keep database exports, connection strings, passwords, API keys, and service-role credentials out of Git, screenshots, chat, and public storage.
 - Keep backup files outside the repository and use encrypted storage with access limited to authorized operators.
 
-## 9. Current limitations
+## 10. Current limitations
 
 The manual CLI export, separate Storage copy, Auth recovery assessment, and restore rehearsal must be completed using authorized local tooling before the release gate can be cleared. A SQL Editor read-only inspection is not a backup. The runbook is documentation only and does not authorize applying migrations, merging pull requests, deploying, or changing the Supabase plan.
 
