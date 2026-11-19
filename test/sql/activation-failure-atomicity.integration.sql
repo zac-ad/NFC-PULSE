@@ -25,14 +25,17 @@ CREATE TABLE auth.users (
   email text
 );
 CREATE TABLE public.accounts (
-  id uuid PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text UNIQUE NOT NULL
 );
 CREATE TABLE public.profiles (
-  id uuid PRIMARY KEY,
-  account_id uuid,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id),
   slug text UNIQUE NOT NULL,
-  profile_type text
+  profile_type text NOT NULL,
+  full_name text NOT NULL,
+  email text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true
 );
 
 INSERT INTO auth.users(id, email) VALUES
@@ -40,7 +43,10 @@ INSERT INTO auth.users(id, email) VALUES
   ('00000000-0000-0000-0000-000000000002', 'taken@example.invalid'),
   ('00000000-0000-0000-0000-000000000003', 'deleting@example.invalid'),
   ('00000000-0000-0000-0000-000000000004', 'mismatch@example.invalid'),
-  ('00000000-0000-0000-0000-000000000005', 'old-email@example.invalid');
+  ('00000000-0000-0000-0000-000000000005', 'old-email@example.invalid'),
+  ('00000000-0000-0000-0000-000000000009', 'late@example.invalid'),
+  ('00000000-0000-0000-0000-000000000010', 'success@example.invalid'),
+  ('00000000-0000-0000-0000-000000000011', 'error@example.invalid');
 INSERT INTO public.accounts(id, email) VALUES
   ('10000000-0000-0000-0000-000000000001', 'good@example.invalid'),
   ('10000000-0000-0000-0000-000000000002', 'taken@example.invalid'),
@@ -88,67 +94,32 @@ UPDATE auth.users
 UPDATE auth.users
    SET email = 'moved@example.invalid'
  WHERE id = '00000000-0000-0000-0000-000000000005';
-INSERT INTO public.profiles(id, account_id, slug, profile_type) VALUES
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'taken-slug', 'PERSONAL'),
-  ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'same-account-personal', 'PERSONAL');
+INSERT INTO public.profiles(id, account_id, slug, profile_type, full_name, email) VALUES
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'taken-slug', 'PERSONAL', 'Taken User', 'taken@example.invalid'),
+  ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'same-account-personal', 'PERSONAL', 'Good User', 'good@example.invalid');
+
+UPDATE public.accounts SET deletion_status = 'DELETING'
+ WHERE email = 'deleting@example.invalid';
 
 CREATE TABLE public.hardware_cards (
-  card_code text PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  card_code text UNIQUE NOT NULL,
   status text NOT NULL,
-  activation_secret_hash text
+  activation_secret_hash text,
+  profile_id uuid REFERENCES public.profiles(id),
+  activated_at timestamptz,
+  activation_secret_issued_at timestamptz
 );
 INSERT INTO public.hardware_cards(card_code, status, activation_secret_hash) VALUES
   ('PREFLIGHT-GOOD', 'UNCLAIMED', 'hash-good'),
   ('PREFLIGHT-CLAIMED', 'ACTIVE', 'hash-claimed'),
-  ('PREFLIGHT-NO-SECRET', 'UNCLAIMED', NULL);
+  ('PREFLIGHT-NO-SECRET', 'UNCLAIMED', NULL),
+  ('ATOMIC-LATE-FAILURE', 'UNCLAIMED', 'hash-late'),
+  ('ATOMIC-SUCCESS', 'UNCLAIMED', 'hash-success'),
+  ('ATOMIC-UNEXPECTED-ERROR', 'UNCLAIMED', 'hash-error');
 
-CREATE TABLE public.activation_atomicity_probe (
-  marker text NOT NULL
-);
-
-CREATE OR REPLACE FUNCTION public.activate_card_v2(
-  p_card_code text,
-  p_activation_secret_hash text,
-  p_email text,
-  p_full_name text,
-  p_slug text,
-  p_profile_type text,
-  p_auth_user_id uuid
-)
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO ''
-AS $function$
-DECLARE
-  v_result json;
-  v_account record;
-BEGIN
-  -- Keep this exact lookup marker aligned with the forward migration guard.
-  SELECT id, auth_user_id, deletion_status INTO v_account
-    FROM public.accounts
-   WHERE email = lower(trim(p_email))
-   FOR UPDATE;
-
-  INSERT INTO public.activation_atomicity_probe(marker) VALUES ('write-before-late-failure');
-
-  IF p_card_code = 'late-failure' THEN
-    RETURN json_build_object('error', 'This card was just claimed by someone else. Please try again.');
-  END IF;
-
-  IF p_card_code = 'unexpected-error' THEN
-    RAISE EXCEPTION 'fixture unexpected error';
-  END IF;
-
-  RETURN json_build_object('success', true);
-EXCEPTION
-  WHEN OTHERS THEN
-    RETURN json_build_object('error', 'Something went wrong. Please try again.');
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION public.activate_card_v2(text,text,text,text,text,text,uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.activate_card_v2(text,text,text,text,text,text,uuid) TO service_role;
+-- The lifecycle migration above creates the real production activation function.
+-- Keep its function body intact; only the production forward migrations patch it.
 
 -- Exercise the card preflight against a disposable hardware_cards fixture.
 \i supabase/migrations/20261028130000_activation_preflight.sql
@@ -236,107 +207,136 @@ $preflight_assertions$;
 \i supabase/migrations/20261028120000_activation_failure_atomicity.sql
 \i supabase/migrations/20261028140000_activation_identity_binding.sql
 
+-- Test-only trigger simulates a late conditional card update that affects zero rows.
+-- The real activation function has already created/updated the account and profile
+-- when this happens; the migration must force rollback of those earlier writes.
+CREATE OR REPLACE FUNCTION public.test_skip_late_card_claim()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger$
+BEGIN
+  IF OLD.card_code = 'ATOMIC-LATE-FAILURE' AND NEW.status = 'ACTIVE' THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END;
+$trigger$;
+CREATE TRIGGER test_skip_late_card_claim
+BEFORE UPDATE ON public.hardware_cards
+FOR EACH ROW EXECUTE FUNCTION public.test_skip_late_card_claim();
+
+-- A separate injected profile insert error verifies the generic exception path
+-- also rolls back the account inserted earlier in the same activation call.
+CREATE OR REPLACE FUNCTION public.test_raise_profile_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger$
+BEGIN
+  IF NEW.slug = 'atomic-unexpected-error' THEN
+    RAISE EXCEPTION 'fixture unexpected profile insert failure';
+  END IF;
+  RETURN NEW;
+END;
+$trigger$;
+CREATE TRIGGER test_raise_profile_insert
+BEFORE INSERT ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION public.test_raise_profile_insert();
+
 DO $assertions$
 DECLARE
   v_result json;
-  v_function_oid oid := to_regprocedure('public.activate_card_v2(text,text,text,text,text,text,uuid)');
+  v_profile_id uuid;
+  v_account_id uuid;
+  v_card_status text;
+  v_card_secret text;
   v_is_security_definer boolean;
   v_config text[];
-  v_probe_count bigint;
+  v_function_oid oid := to_regprocedure('public.activate_card_v2(text,text,text,text,text,text,uuid)');
 BEGIN
-  -- The final activation function must reject an Auth identity already bound
-  -- to an account with a different stored email, even if Auth email matches.
+  -- Final activation must reject an Auth identity already bound to another
+  -- account, even when that Auth identity's current email matches the request.
   v_result := public.activate_card_v2(
-    'identity-mismatch',
-    'unused-test-hash',
-    'different@example.invalid',
-    'Test User',
-    'test-user',
-    'personal',
+    'ATOMIC-SUCCESS', 'hash-success', 'different@example.invalid',
+    'Mismatch User', 'identity-mismatch', 'PERSONAL',
     '00000000-0000-0000-0000-000000000004'::uuid
   );
   IF v_result->>'error' <> 'This login identity is already connected to another PULSE account.' THEN
-    RAISE EXCEPTION 'Final activation did not reject a cross-account Auth identity, got: %', v_result;
+    RAISE EXCEPTION 'Final activation did not reject cross-account Auth identity, got: %', v_result;
   END IF;
-  IF EXISTS (SELECT 1 FROM public.activation_atomicity_probe) THEN
-    RAISE EXCEPTION 'Identity-binding rejection occurred after a database write';
+  IF EXISTS (SELECT 1 FROM public.accounts WHERE email = 'different@example.invalid')
+     OR EXISTS (SELECT 1 FROM public.profiles WHERE slug = 'identity-mismatch') THEN
+    RAISE EXCEPTION 'Identity-binding rejection left account/profile writes behind';
   END IF;
 
+  -- The actual production activation function now reaches its late card update.
+  -- The test trigger makes that conditional UPDATE affect zero rows.
   v_result := public.activate_card_v2(
-    'late-failure',
-    'unused-test-hash',
-    'test@example.invalid',
-    'Test User',
-    'test-user',
-    'personal',
+    'ATOMIC-LATE-FAILURE', 'hash-late', 'late@example.invalid',
+    'Late Failure User', 'atomic-late-failure', 'PERSONAL',
     '00000000-0000-0000-0000-000000000009'::uuid
   );
-
   IF v_result->>'error' <> 'This card was just claimed by someone else. Please try again.' THEN
-    RAISE EXCEPTION 'Expected the late card-claim error, got: %', v_result;
+    RAISE EXCEPTION 'Expected late card-claim failure, got: %', v_result;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.accounts WHERE email = 'late@example.invalid')
+     OR EXISTS (SELECT 1 FROM public.profiles WHERE slug = 'atomic-late-failure') THEN
+    RAISE EXCEPTION 'Late activation failure did not roll back account/profile writes';
+  END IF;
+  SELECT status, activation_secret_hash INTO v_card_status, v_card_secret
+    FROM public.hardware_cards WHERE card_code = 'ATOMIC-LATE-FAILURE';
+  IF v_card_status <> 'UNCLAIMED' OR v_card_secret <> 'hash-late' THEN
+    RAISE EXCEPTION 'Late failure changed the card state or activation credential';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM public.activation_atomicity_probe) THEN
-    RAISE EXCEPTION 'Late activation failure did not roll back the earlier database write';
-  END IF;
-
-  -- Confirm a normal call still succeeds and commits its write.
+  -- A successful activation must persist account, profile, and card binding.
   v_result := public.activate_card_v2(
-    'normal-success',
-    'unused-test-hash',
-    'test@example.invalid',
-    'Test User',
-    'test-user',
-    'personal',
-    '00000000-0000-0000-0000-000000000009'::uuid
+    'ATOMIC-SUCCESS', 'hash-success', 'success@example.invalid',
+    'Success User', 'atomic-success', 'PERSONAL',
+    '00000000-0000-0000-0000-000000000010'::uuid
   );
   IF v_result->>'success' <> 'true' THEN
-    RAISE EXCEPTION 'Expected normal activation success, got: %', v_result;
+    RAISE EXCEPTION 'Expected real activation success, got: %', v_result;
+  END IF;
+  v_account_id := (v_result->>'account_id')::uuid;
+  v_profile_id := (v_result->>'profile_id')::uuid;
+  IF NOT EXISTS (SELECT 1 FROM public.accounts WHERE id = v_account_id AND auth_user_id = '00000000-0000-0000-0000-000000000010'::uuid)
+     OR NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = v_profile_id AND account_id = v_account_id AND slug = 'atomic-success')
+     OR NOT EXISTS (SELECT 1 FROM public.hardware_cards WHERE card_code = 'ATOMIC-SUCCESS' AND status = 'ACTIVE' AND profile_id = v_profile_id AND activation_secret_hash IS NULL) THEN
+    RAISE EXCEPTION 'Successful activation did not persist all expected account/profile/card changes';
   END IF;
 
-  SELECT count(*) INTO v_probe_count FROM public.activation_atomicity_probe;
-  IF v_probe_count <> 1 THEN
-    RAISE EXCEPTION 'Expected normal activation to commit exactly one write, found %', v_probe_count;
-  END IF;
-
-  -- Confirm the generic error handler still returns its stable response and
-  -- rolls back only the failing call's write.
+  -- Generic exception after account creation must roll back the account insert.
   v_result := public.activate_card_v2(
-    'unexpected-error',
-    'unused-test-hash',
-    'test@example.invalid',
-    'Test User',
-    'test-user',
-    'personal',
-    '00000000-0000-0000-0000-000000000009'::uuid
+    'ATOMIC-UNEXPECTED-ERROR', 'hash-error', 'error@example.invalid',
+    'Error User', 'atomic-unexpected-error', 'PERSONAL',
+    '00000000-0000-0000-0000-000000000011'::uuid
   );
   IF v_result->>'error' <> 'Something went wrong. Please try again.' THEN
-    RAISE EXCEPTION 'Expected the generic error response, got: %', v_result;
+    RAISE EXCEPTION 'Expected generic activation error, got: %', v_result;
   END IF;
-  SELECT count(*) INTO v_probe_count FROM public.activation_atomicity_probe;
-  IF v_probe_count <> 1 THEN
-    RAISE EXCEPTION 'Unexpected error did not roll back only its own write; found % rows', v_probe_count;
+  IF EXISTS (SELECT 1 FROM public.accounts WHERE email = 'error@example.invalid')
+     OR EXISTS (SELECT 1 FROM public.profiles WHERE slug = 'atomic-unexpected-error') THEN
+    RAISE EXCEPTION 'Generic activation exception did not roll back account/profile writes';
   END IF;
 
-  SELECT p.prosecdef, p.proconfig
-    INTO v_is_security_definer, v_config
-    FROM pg_proc AS p
-   WHERE p.oid = v_function_oid;
-
+  SELECT p.prosecdef, p.proconfig INTO v_is_security_definer, v_config
+    FROM pg_proc AS p WHERE p.oid = v_function_oid;
   IF v_is_security_definer IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'Migration changed SECURITY DEFINER behavior';
+    RAISE EXCEPTION 'Activation function is not SECURITY DEFINER';
   END IF;
   IF NOT (coalesce(v_config, ARRAY[]::text[]) @> ARRAY['search_path=""']) THEN
-    RAISE EXCEPTION 'Migration did not preserve the empty search_path setting: %', v_config;
+    RAISE EXCEPTION 'Activation function lost its empty search_path: %', v_config;
   END IF;
   IF has_function_privilege('anon', v_function_oid, 'EXECUTE')
      OR has_function_privilege('authenticated', v_function_oid, 'EXECUTE') THEN
-    RAISE EXCEPTION 'Migration widened execute permissions for anon/authenticated';
+    RAISE EXCEPTION 'Activation execute permissions were widened';
   END IF;
   IF NOT has_function_privilege('service_role', v_function_oid, 'EXECUTE') THEN
-    RAISE EXCEPTION 'Migration did not preserve service_role execute permission';
+    RAISE EXCEPTION 'service_role cannot execute activation function';
   END IF;
 END;
 $assertions$;
+
+SELECT 'production activation function integration test passed' AS result;
 
 SELECT 'activation failure atomicity integration test passed' AS result;
