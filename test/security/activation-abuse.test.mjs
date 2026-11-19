@@ -8,7 +8,7 @@ test("activation rate limit runs before parsing or database activation", () => {
   const source = read("app/api/activate/route.ts");
   const limiter = source.indexOf("checkRateLimit");
   const parse = source.indexOf("request.json");
-  const rpc = source.indexOf(".rpc('activate_card'");
+  const rpc = source.indexOf(".rpc('activate_card_v2'");
   assert.ok(limiter >= 0);
   assert.ok(parse > limiter);
   assert.ok(rpc > limiter);
@@ -24,14 +24,16 @@ test("activation normalizes card codes before the atomic RPC", () => {
 test("activation maps claimed, missing, and concurrent-card states to non-success responses", () => {
   const source = read("app/api/activate/route.ts");
   assert.match(source, /already been activated.*409/);
-  assert.match(source, /couldn\\'t find that card.*404/);
+  assert.match(source, /couldn\'t find that card/);
+  assert.match(source, /message\.includes\("couldn\'t find that card"\) \? 404/);
   assert.match(source, /being activated right now.*409/);
 });
 
 test("atomic activation is the only database write path in the route", () => {
   const source = read("app/api/activate/route.ts");
-  assert.equal((source.match(/\.rpc\(/g) || []).length, 1);
-  assert.match(source, /\.rpc\('activate_card'/);
+  assert.equal((source.match(/\.rpc\(/g) || []).length, 2);
+  assert.match(source, /\.rpc\('validate_card_activation_v1'/);
+  assert.match(source, /\.rpc\('activate_card_v2'/);
   assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
 });
 
@@ -62,4 +64,18 @@ test("activation rate limiter fails closed when its database check fails", () =>
   const source = read("lib/rateLimit.ts");
   assert.match(source, /if \(error\)/);
   assert.match(source, /return false/);
+});
+
+test("activation rejects whitespace-only names before preflight or Auth provisioning", () => {
+  const source = read("app/api/activate/route.ts");
+  const normalizeName = source.indexOf("const cleanName  = String(fullName).trim()");
+  const rejectEmptyName = source.indexOf("if (!cleanName)");
+  const preflight = source.indexOf(".rpc('validate_card_activation_v1'");
+  const ensureAuth = source.indexOf("ensureAuthUser(cleanEmail)");
+
+  assert.ok(normalizeName >= 0, "name must be normalized");
+  assert.ok(rejectEmptyName > normalizeName, "empty normalized names must be rejected");
+  assert.ok(preflight > rejectEmptyName, "name validation must precede preflight");
+  assert.ok(ensureAuth > rejectEmptyName, "name validation must precede Auth provisioning");
+  assert.match(source, /if \(!cleanName\)\s*\{\s*return NextResponse\.json\(\{ error: 'Full name is required\.' \}, \{ status: 400 \}\);/);
 });
