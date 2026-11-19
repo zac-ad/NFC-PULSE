@@ -120,7 +120,6 @@ DO $assertions$
 DECLARE
   v_oid oid;
   v_config text[];
-  v_definition text;
   v_name text;
   v_signatures text[] := ARRAY[
     'public.check_rate_limit(text,integer,integer)',
@@ -134,8 +133,8 @@ BEGIN
       RAISE EXCEPTION 'Expected function missing: %', v_name;
     END IF;
 
-    SELECT p.proconfig, pg_get_functiondef(p.oid)
-      INTO v_config, v_definition
+    SELECT p.proconfig
+      INTO v_config
       FROM pg_proc AS p
      WHERE p.oid = v_oid;
 
@@ -147,7 +146,14 @@ BEGIN
     END IF;
     IF has_function_privilege('anon', v_oid, 'EXECUTE')
        OR has_function_privilege('authenticated', v_oid, 'EXECUTE')
-       OR has_function_privilege('public', v_oid, 'EXECUTE') THEN
+       OR EXISTS (
+         SELECT 1
+           FROM pg_proc AS p,
+                LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
+          WHERE p.oid = v_oid
+            AND acl.grantee = 0
+            AND acl.privilege_type = 'EXECUTE'
+       ) THEN
       RAISE EXCEPTION 'Function % is executable by an unintended role', v_name;
     END IF;
     IF NOT has_function_privilege('service_role', v_oid, 'EXECUTE') THEN
@@ -184,7 +190,7 @@ DECLARE
   v_count integer;
   v_id uuid;
 BEGIN
-  SELECT count(*), min(id) INTO v_count, v_id
+  SELECT count(*), (array_agg(id))[1] INTO v_count, v_id
     FROM public.get_or_create_account('function-test@example.invalid');
   IF v_count <> 1 OR v_id IS NULL THEN
     RAISE EXCEPTION 'Account helper did not create and return exactly one account';
