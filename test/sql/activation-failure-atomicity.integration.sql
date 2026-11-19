@@ -26,9 +26,7 @@ CREATE TABLE auth.users (
 );
 CREATE TABLE public.accounts (
   id uuid PRIMARY KEY,
-  email text UNIQUE NOT NULL,
-  auth_user_id uuid,
-  deletion_status text NOT NULL
+  email text UNIQUE NOT NULL
 );
 CREATE TABLE public.profiles (
   id uuid PRIMARY KEY,
@@ -41,14 +39,55 @@ INSERT INTO auth.users(id, email) VALUES
   ('00000000-0000-0000-0000-000000000001', 'good@example.invalid'),
   ('00000000-0000-0000-0000-000000000002', 'taken@example.invalid'),
   ('00000000-0000-0000-0000-000000000003', 'deleting@example.invalid'),
-  ('00000000-0000-0000-0000-000000000004', 'different@example.invalid'),
-  ('00000000-0000-0000-0000-000000000005', 'moved@example.invalid');
-INSERT INTO public.accounts(id, email, auth_user_id, deletion_status) VALUES
-  ('10000000-0000-0000-0000-000000000001', 'good@example.invalid', '00000000-0000-0000-0000-000000000001', 'ACTIVE'),
-  ('10000000-0000-0000-0000-000000000002', 'taken@example.invalid', '00000000-0000-0000-0000-000000000002', 'ACTIVE'),
-  ('10000000-0000-0000-0000-000000000003', 'deleting@example.invalid', '00000000-0000-0000-0000-000000000003', 'DELETING'),
-  ('10000000-0000-0000-0000-000000000004', 'mismatch@example.invalid', '00000000-0000-0000-0000-000000000004', 'ACTIVE'),
-  ('10000000-0000-0000-0000-000000000005', 'old-email@example.invalid', '00000000-0000-0000-0000-000000000005', 'ACTIVE');
+  ('00000000-0000-0000-0000-000000000004', 'mismatch@example.invalid'),
+  ('00000000-0000-0000-0000-000000000005', 'old-email@example.invalid');
+INSERT INTO public.accounts(id, email) VALUES
+  ('10000000-0000-0000-0000-000000000001', 'good@example.invalid'),
+  ('10000000-0000-0000-0000-000000000002', 'taken@example.invalid'),
+  ('10000000-0000-0000-0000-000000000003', 'deleting@example.invalid'),
+  ('10000000-0000-0000-0000-000000000004', 'mismatch@example.invalid'),
+  ('10000000-0000-0000-0000-000000000005', 'old-email@example.invalid');
+
+-- Exercise the real account/Auth lifecycle migration from the pre-lifecycle schema.
+\\i supabase/migrations/20261002071402_account_auth_lifecycle.sql
+
+DO $lifecycle_assertions$
+DECLARE
+  v_count integer;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.accounts
+     WHERE auth_user_id IS NULL OR deletion_status <> 'ACTIVE'
+  ) THEN
+    RAISE EXCEPTION 'Lifecycle migration did not backfill every account or set ACTIVE status';
+  END IF;
+
+  SELECT count(*) INTO v_count FROM public.accounts;
+  IF v_count <> 5 THEN
+    RAISE EXCEPTION 'Expected five migrated accounts, found %', v_count;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'accounts_auth_user_id_fkey'
+       AND contype = 'f'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'accounts_deletion_status_check'
+       AND contype = 'c'
+  ) OR to_regclass('public.accounts_auth_user_id_key') IS NULL THEN
+    RAISE EXCEPTION 'Lifecycle migration did not create its expected constraints and unique index';
+  END IF;
+END;
+$lifecycle_assertions$;
+
+-- Simulate Auth email changes after the account identities have been bound.
+UPDATE auth.users
+   SET email = 'different@example.invalid'
+ WHERE id = '00000000-0000-0000-0000-000000000004';
+UPDATE auth.users
+   SET email = 'moved@example.invalid'
+ WHERE id = '00000000-0000-0000-0000-000000000005';
 INSERT INTO public.profiles(id, account_id, slug, profile_type) VALUES
   ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'taken-slug', 'PERSONAL'),
   ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'same-account-personal', 'PERSONAL');
