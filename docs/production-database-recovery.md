@@ -6,68 +6,133 @@
 
 Do not apply production migrations or merge/deploy activation code until a recoverable pre-change backup has been created and independently verified.
 
-Check the project's current Supabase backup settings at release time. Record the available scheduled-backup and Point-in-Time Recovery options in a private operations record. Do not assume that a dashboard tab, plan label, or SQL Editor query proves that a restorable backup exists.
+The production project is currently on the Supabase Free Plan. The Backups page states that scheduled project backups are not included; the Point in Time tab is also unavailable without a paid plan. Do not treat either feature as an available recovery path.
 
-## 2. What the Supabase CLI logical dump covers
+Record the backup date, project ref, PostgreSQL major version, export scope, file hashes, storage-object verification, and restore-test result in a private operations record. Do not commit this record or backup artifacts to Git.
 
-The supported CLI workflow uses supabase db dump for roles, project schema, and data. Supabase documents that the CLI filters out Supabase-managed schemas such as auth and storage, and extension-created schemas. The default schema dump also does not include data or custom roles unless the relevant flags are used.
+## 2. Inventory observed on 2026-11-19
 
-Example commands (run locally from a trusted computer; never paste credentials into chat):
+Read-only SQL inspection of production reported:
+
+- PostgreSQL 17.11.
+- 10 public base tables and 2 public views.
+- 7 public functions, 10 public policies, 32 public indexes, and 0 public triggers.
+- 6 Auth users.
+- One private Storage bucket, `profile-media`, containing 23 object records.
+- 19 applied Supabase migrations; latest version `20261002071402`.
+
+These counts are a point-in-time inventory, not a backup. Re-run the inventory immediately before the release because production may change.
+
+## 3. What the Supabase CLI logical dump covers
+
+The supported CLI workflow uses `supabase db dump` for roles, project schema, and data. Supabase documents that the CLI filters out Supabase-managed schemas such as `auth` and `storage`, and extension-created schemas. A schema dump also does not include table data or custom roles unless the relevant flags are used.
+
+Run the following from PowerShell on a trusted Windows computer with Supabase CLI and the required PostgreSQL client tools installed. Use the database connection string from the Supabase dashboard's Connect panel. Never paste credentials into chat, Git, screenshots, or a shared document. Do not save the connection string in this repository.
+
+Create a private backup directory outside the repository:
 
 ```powershell
-$env:SUPABASE_DB_URL = Read-Host "Paste the database connection string"
-
-supabase db dump --db-url "$env:SUPABASE_DB_URL" -f roles.sql --role-only
-supabase db dump --db-url "$env:SUPABASE_DB_URL" -f schema.sql
-supabase db dump --db-url "$env:SUPABASE_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+$BackupDir = Join-Path $env:USERPROFILE ("PULSE-DB-Backup-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+New-Item -ItemType Directory -Path $BackupDir | Out-Null
+Set-Location $BackupDir
 ```
 
-**Scope warning:** These files are a logical export of the supported project database objects, not a complete Supabase project backup. They do not, by themselves, preserve managed Auth/Storage schemas, Storage file objects, project/API settings, Edge Function deployments, SMTP/provider configuration, or all platform-level settings. Do not label them a full disaster-recovery backup.
+Set `SUPABASE_DB_URL` in the local PowerShell session using your approved local secret-handling method. Do not put the literal connection string in a command that will be saved in shell history. Then run:
 
-Official references:
-- https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore
-- https://supabase.com/docs/reference/cli/supabase-db-dump
+```powershell
+supabase db dump --db-url "$env:SUPABASE_DB_URL" -f roles.sql --role-only
+if ($LASTEXITCODE -ne 0) { throw "Roles export failed" }
 
-## 3. Backup acceptance checklist
+supabase db dump --db-url "$env:SUPABASE_DB_URL" -f schema.sql
+if ($LASTEXITCODE -ne 0) { throw "Schema export failed" }
+
+supabase db dump --db-url "$env:SUPABASE_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+if ($LASTEXITCODE -ne 0) { throw "Data export failed" }
+```
+
+Check that the three files exist and are non-empty, then record SHA-256 hashes:
+
+```powershell
+Get-Item roles.sql, schema.sql, data.sql | Select-Object Name, Length
+Get-FileHash roles.sql, schema.sql, data.sql -Algorithm SHA256
+```
+
+If a command fails, stop and preserve the error. Do not proceed with a partial export.
+
+**Scope warning:** These files are a logical export of supported project database objects, not a complete Supabase project backup. They do not, by themselves, preserve managed Auth/Storage schemas, Storage file objects, project/API settings, Edge Function deployments, SMTP/provider configuration, or all platform-level settings. Do not label them a full disaster-recovery backup.
+
+## 4. Separate Auth and Storage recovery work
+
+The CLI dump above explicitly does not back up the managed `auth` or `storage` schemas. Do not try to restore Supabase-managed schemas by blindly importing their tables into another Supabase project.
+
+For Auth, separately document the supported account recovery/export options available for the project and verify what can actually be restored. Do not export password hashes or authentication secrets into an ordinary file, and do not assume that a list of user IDs/emails is enough to restore working sign-in identities.
+
+For Storage, create a separate inventory of the `profile-media` bucket and copy every object to a private backup location using an authorized Storage download workflow. Preserve each object's bucket-relative path and verify the copied file count and hashes. A row in `storage.objects` is metadata; it is not the uploaded file itself. Do not make the bucket public to simplify backup.
+
+Also record how deployed Edge Functions, environment secrets, redirect URLs, authentication provider settings, and other required project configuration would be recreated. Never put secret values in the runbook or Git.
+
+If any required Auth, Storage, or platform recovery path is unknown, the full-project backup gate remains blocked.
+
+## 5. Restore rehearsal
+
+Use an isolated local PostgreSQL 17 environment or another approved disposable environment. Never test restoration against production.
+
+- Restore the supported roles, schema, and data exports into the isolated database using the matching PostgreSQL/Supabase tooling.
+- Confirm that the restore finishes without errors.
+- Compare restored table counts and important schema definitions with the pre-export inventory.
+- Check functions, views, policies, indexes, and migration history.
+- Separately test the documented Auth and Storage recovery procedures to the extent the platform supports them.
+- Record any objects or settings that cannot be restored.
+
+A successful PostgreSQL restore alone does not prove that a full Supabase project can be recovered.
+
+## 6. Backup acceptance checklist
 
 Before a production migration, record and verify all of the following:
 
 - [ ] Export completed with exit code 0.
 - [ ] Roles, schema, and data files exist and are non-empty.
 - [ ] Files are stored privately, with an encrypted second copy outside the device.
-- [ ] File hashes (for example SHA-256) are recorded.
-- [ ] Schema includes the PULSE-owned tables, functions, triggers, policies, and views.
+- [ ] SHA-256 hashes are recorded and rechecked after copying.
+- [ ] Schema includes the PULSE-owned tables, functions, policies, indexes, and views.
 - [ ] The export's exclusions are understood; managed Auth and Storage data are not falsely marked as covered.
-- [ ] A restore rehearsal succeeds in an isolated PostgreSQL environment compatible with production PostgreSQL 17.
+- [ ] All 23 currently inventoried Storage objects (or the updated count at backup time) are copied and verified by path, count, and hash.
+- [ ] Auth recovery scope and limitations are documented and tested where supported.
+- [ ] A restore rehearsal succeeds in an isolated PostgreSQL 17 environment.
 - [ ] Restored table counts and key schema definitions are checked.
-- [ ] Supabase Auth, Storage objects, Edge Functions, and project settings have a separately confirmed recovery path where required.
-- [ ] The backup timestamp and restore-test result are recorded.
+- [ ] Edge Functions and required project settings have a separately confirmed recreation path.
+- [ ] Backup timestamp and restore-test result are recorded.
 
-If a complete managed-project recovery path cannot be confirmed, keep the activation release on hold.
+If a complete managed-project recovery path cannot be confirmed, keep the activation release on hold. If Supabase-managed Auth cannot be independently restored, explicitly record that limitation; do not claim a full disaster-recovery backup.
 
-## 4. Migration release procedure
+## 7. Migration release procedure
 
 For the pending activation release:
 
 1. Verify production migration history immediately before the change.
-2. Confirm that the pre-change backup is accepted under Section 3.
+2. Confirm that the pre-change backup is accepted under Section 6.
 3. Apply the three activation migrations in their exact order:
-   - 20261028120000_activation_failure_atomicity.sql
-   - 20261028130000_activation_preflight.sql
-   - 20261028140000_activation_identity_binding.sql
+   - `20261028120000_activation_failure_atomicity.sql`
+   - `20261028130000_activation_preflight.sql`
+   - `20261028140000_activation_identity_binding.sql`
 4. Verify the new preflight function, activation function definition, grants, and migration history using read-only queries.
 5. Only after database verification, approve the application PR merge/deployment.
 6. Run activation smoke tests using a dedicated test card/account, not a customer card.
 7. If a migration fails, stop. Do not continue to the next migration or manually edit migration history.
 
-## 5. Recovery principles
+## 8. Recovery principles
 
 - Prefer a tested forward corrective migration for function or schema changes.
 - Do not delete rows from Supabase migration history to pretend a migration did not run.
 - Do not restore the production project or overwrite live data without explicit approval and a verified recovery plan.
 - Do not delete Auth users as cleanup; unbound Auth identities may belong to legitimate signup flows.
 - Keep database exports, connection strings, passwords, API keys, and service-role credentials out of Git, screenshots, chat, and public storage.
+- Keep backup files outside the repository and use encrypted storage with access limited to authorized operators.
 
-## 6. Current limitations
+## 9. Current limitations
 
-The manual CLI export and restore rehearsal must be completed using authorized local tooling before the release gate can be cleared. A SQL Editor read-only inspection is not a backup. The runbook is documentation only and does not authorize applying migrations, merging pull requests, deploying, or changing the Supabase plan.
+The manual CLI export, separate Storage copy, Auth recovery assessment, and restore rehearsal must be completed using authorized local tooling before the release gate can be cleared. A SQL Editor read-only inspection is not a backup. The runbook is documentation only and does not authorize applying migrations, merging pull requests, deploying, or changing the Supabase plan.
+
+Official references:
+- https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore
+- https://supabase.com/docs/reference/cli/supabase-db-dump
