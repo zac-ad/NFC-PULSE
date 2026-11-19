@@ -1,16 +1,12 @@
 # PULSE production database recovery runbook
 
-**Status: preparation only. No production backup has been created or restore test completed.**
+**Status: reusable checklist. Complete and verify each item for the target project before a production release.**
 
-## 1. Current release guard
+## 1. Production release guard
 
 Do not apply production migrations or merge/deploy activation code until a recoverable pre-change backup has been created and independently verified.
 
-The Supabase dashboard screenshots reviewed on 2026-11-19 showed:
-- Scheduled backups were not included in the current plan.
-- Point-in-Time Recovery was shown as a Pro Plan add-on.
-
-Those screenshots do not prove that a separate export or restore is available.
+Check the project's current Supabase backup settings at release time. Record the available scheduled-backup and Point-in-Time Recovery options in a private operations record. Do not assume that a dashboard tab, plan label, or SQL Editor query proves that a restorable backup exists.
 
 ## 2. What the Supabase CLI logical dump covers
 
@@ -74,4 +70,4 @@ For the pending activation release:
 
 ## 6. Current limitations
 
-The manual CLI export and its restore have not yet been run from the user's tablet. A SQL Editor read-only inspection is not a backup. The runbook is documentation only and does not authorize applying migrations, merging pull requests, deploying, or changing the Supabase plan.
+The manual CLI export and restore rehearsal must be completed using authorized local tooling before the release gate can be cleared. A SQL Editor read-only inspection is not a backup. The runbook is documentation only and does not authorize applying migrations, merging pull requests, deploying, or changing the Supabase plan.
