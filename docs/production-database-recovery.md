@@ -37,16 +37,16 @@ New-Item -ItemType Directory -Path $BackupDir | Out-Null
 Set-Location $BackupDir
 ```
 
-Set `SUPABASE_DB_URL` in the local PowerShell session using your approved local secret-handling method. Do not put the literal connection string in a command that will be saved in shell history. Then run:
+Set `SUPABASE_DB_URL` in the local PowerShell session using your approved local secret-handling method. Do not put the literal connection string in a command that will be saved in shell history. Current Supabase CLI v3 uses `--remote=<project-ref|database-url>`; the commands below pass the URL explicitly so they do not depend on a previously linked project. Then run:
 
 ```powershell
-supabase db dump --db-url "$env:SUPABASE_DB_URL" -f roles.sql --role-only
+supabase db dump --remote="$env:SUPABASE_DB_URL" -f roles.sql --role-only
 if ($LASTEXITCODE -ne 0) { throw "Roles export failed" }
 
-supabase db dump --db-url "$env:SUPABASE_DB_URL" -f schema.sql
+supabase db dump --remote="$env:SUPABASE_DB_URL" -f schema.sql
 if ($LASTEXITCODE -ne 0) { throw "Schema export failed" }
 
-supabase db dump --db-url "$env:SUPABASE_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+supabase db dump --remote="$env:SUPABASE_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
 if ($LASTEXITCODE -ne 0) { throw "Data export failed" }
 ```
 
