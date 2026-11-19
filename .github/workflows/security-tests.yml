@@ -66,6 +66,13 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pulse_test
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f test/sql/activation-failure-atomicity.integration.sql
 
+      - name: Run function search_path hardening test on disposable PostgreSQL 17
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -p 5433 -U postgres pulse_function_test
+          psql "postgresql://postgres:postgres@localhost:5433/pulse_function_test" -v ON_ERROR_STOP=1 -f test/sql/function-search-path-hardening.integration.sql
+
       - name: Run duplicate-index cleanup regression test on disposable PostgreSQL 17
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5433/pulse_index_test
