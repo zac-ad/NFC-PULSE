@@ -6,7 +6,7 @@ DECLARE
   v_definition text;
   -- Match the deployed pg_get_functiondef formatting: INTO remains on the SELECT line.
   v_marker text := E'  SELECT id, auth_user_id, deletion_status INTO v_account\n    FROM public.accounts\n   WHERE email = lower(trim(p_email))\n   FOR UPDATE;';
-  v_guard text := E'  -- A login identity already bound to another account must never be rebound\n  -- through activation, even if its current Auth email matches the submitted email.\n  IF EXISTS (\n    SELECT 1\n      FROM public.accounts AS linked_account\n     WHERE linked_account.auth_user_id = p_auth_user_id\n       AND lower(trim(linked_account.email)) <> lower(trim(p_email))\n  ) THEN\n    RETURN json_build_object(\\'error\\', \\'This login identity is already connected to another PULSE account.\\');\n  END IF;\n\n';
+  v_guard text := E'  -- A login identity already bound to another account must never be rebound\n  -- through activation, even if its current Auth email matches the submitted email.\n  IF EXISTS (\n    SELECT 1\n      FROM public.accounts AS linked_account\n     WHERE linked_account.auth_user_id = p_auth_user_id\n       AND lower(trim(linked_account.email)) <> lower(trim(p_email))\n  ) THEN\n    RETURN json_build_object(\'error\', \'This login identity is already connected to another PULSE account.\');\n  END IF;\n\n';
 BEGIN
   v_function_oid := to_regprocedure('public.activate_card_v2(text,text,text,text,text,text,uuid)');
   IF v_function_oid IS NULL THEN
