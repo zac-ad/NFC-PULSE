@@ -86,11 +86,10 @@ DECLARE
   v_account record;
 BEGIN
   -- Keep this exact lookup marker aligned with the forward migration guard.
-  SELECT id, auth_user_id, deletion_status
-    INTO v_account
+  SELECT id, auth_user_id, deletion_status INTO v_account
     FROM public.accounts
    WHERE email = lower(trim(p_email))
-     FOR UPDATE;
+   FOR UPDATE;
 
   INSERT INTO public.activation_atomicity_probe(marker) VALUES ('write-before-late-failure');
 
