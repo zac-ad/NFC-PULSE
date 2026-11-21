@@ -78,6 +78,7 @@ DECLARE
   v_auth_email TEXT;
   v_verified_at TIMESTAMPTZ;
   v_account_id UUID;
+  v_account RECORD;
   v_profile_id UUID;
   v_slug_owner UUID;
   v_card RECORD;
@@ -122,17 +123,17 @@ BEGIN
     RETURN json_build_object('error','This card is no longer available to activate.');
   END IF;
 
-  SELECT id,auth_user_id,deletion_status INTO v_account_id
+  SELECT id,auth_user_id,deletion_status INTO v_account
   FROM public.accounts WHERE email = v_request.email FOR UPDATE;
 
   IF FOUND THEN
-    IF v_account_id.deletion_status <> 'ACTIVE' THEN
+    IF v_account.deletion_status <> 'ACTIVE' THEN
       RETURN json_build_object('error','This account is not available for activation.');
     END IF;
-    IF v_account_id.auth_user_id IS NOT NULL AND v_account_id.auth_user_id <> p_auth_user_id THEN
+    IF v_account.auth_user_id IS NOT NULL AND v_account.auth_user_id <> p_auth_user_id THEN
       RETURN json_build_object('error','This email is already connected to another login.');
     END IF;
-    v_account_id := v_account_id.id;
+    v_account_id := v_account.id;
     UPDATE public.accounts SET auth_user_id = p_auth_user_id WHERE id = v_account_id;
   ELSE
     INSERT INTO public.accounts(email,auth_user_id)
