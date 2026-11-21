@@ -53,7 +53,7 @@ test("viewer-session responses are explicitly non-cacheable", () => {
 test("vCard responses use a safe filename and are explicitly non-cacheable", () => {
   const source = read("app/api/vcard/[slug]/route.ts");
   assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)/);
-  assert.match(source, /filename=\\"\$\{safeFilename\}\.vcf\\"/);
+  assert.match(source, /filename="\$\{safeFilename\}\.vcf"/);
   assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
 });
 
