@@ -1,21 +1,52 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-
-  if (!code) {
-    return NextResponse.redirect(new URL('/portal', request.url));
-  }
+  if (!code) return NextResponse.redirect(new URL('/portal', request.url));
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    console.error('Auth callback exchange failed:', error.message);
-    return NextResponse.redirect(new URL('/portal', request.url));
+  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+  if (exchangeError) {
+    console.error('Auth callback exchange failed:', exchangeError.message);
+    return NextResponse.redirect(new URL('/portal?auth=failed', request.url));
   }
 
-  return NextResponse.redirect(new URL('/dashboard', request.url));
+  const cookieStore = await cookies();
+  const activationRequestId = cookieStore.get('pulse_activation_request')?.value;
+  if (!activationRequestId) return NextResponse.redirect(new URL('/dashboard', request.url));
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user?.id || !userData.user.email) {
+    console.error('Activation callback could not verify Auth user.');
+    const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
+    failed.cookies.delete('pulse_activation_request');
+    return failed;
+  }
+
+  const { data, error: finalizeError } = await supabaseAdmin.rpc('finalize_card_activation', {
+    p_request_id: activationRequestId,
+    p_auth_user_id: userData.user.id,
+  });
+  if (finalizeError) {
+    console.error('Activation finalization RPC failed:', finalizeError.message);
+    const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
+    failed.cookies.delete('pulse_activation_request');
+    return failed;
+  }
+
+  const result = data as { success?: boolean; error?: string };
+  if (!result?.success) {
+    console.error('Activation finalization rejected:', result?.error || 'Unknown activation error');
+    const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
+    failed.cookies.delete('pulse_activation_request');
+    return failed;
+  }
+
+  const success = NextResponse.redirect(new URL('/dashboard?activated=1', request.url));
+  success.cookies.delete('pulse_activation_request');
+  return success;
 }
