@@ -228,7 +228,7 @@ function ActivateContent() {
             <div className="w-2 h-2 rounded-full bg-[#f2f0eb]/60" />
           </div>
           <div className="space-y-3">
-            <p className="font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">Card active</p>
+            <p className="font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">Activation pending</p>
             <h1 className="font-serif text-2xl text-[#f2f0eb]">
               {loginLinkSent ? 'Check your email.' : 'Activation pending.'}
             </h1>
