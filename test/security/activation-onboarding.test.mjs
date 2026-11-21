@@ -4,17 +4,24 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
-test("activation success screen distinguishes email delivery from portal fallback", () => {
+test("activation success UI communicates pending email verification", () => {
   const source = read("app/activate/page.tsx");
-
-  assert.match(source, /const \[loginLinkSent, setLoginLinkSent\]/);
-  assert.match(source, /setLoginLinkSent\(false\)/);
   assert.match(source, /setLoginLinkSent\(true\)/);
-  assert.match(source, /loginLinkSent \? 'Check your email\.' : 'Your card is active\.'/);
+  assert.match(source, /Check your email\./);
+  assert.match(source, /Activation pending/);
+  assert.match(source, /verify ownership and finish activating your card/);
+  assert.doesNotMatch(source, /Your card is active\./);
 });
 
-test("activation submit state exposes busy status", () => {
+test("activation form exposes busy status and requires consent", () => {
   const source = read("app/activate/page.tsx");
   assert.match(source, /disabled=\{loading \|\| !consent \|\| !!slugError\}/);
   assert.match(source, /aria-busy=\{loading\}/);
+  assert.match(source, /if \(!consent\)/);
+});
+
+test("activation form calls pending API rather than browser-side activation", () => {
+  const source = read("app/activate/page.tsx");
+  assert.match(source, /fetch\('\/api\/activate'/);
+  assert.doesNotMatch(source, /supabase\.rpc\(['"]activate_card/);
 });
