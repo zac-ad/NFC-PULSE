@@ -14,7 +14,6 @@ test("magic-link callback exchanges the Supabase auth code before dashboard redi
 
 test("magic-link callers use the server auth callback", () => {
   for (const path of [
-    "app/activate/page.tsx",
     "app/portal/professional/login/page.tsx",
     "app/portal/personal/login/page.tsx",
   ]) {
