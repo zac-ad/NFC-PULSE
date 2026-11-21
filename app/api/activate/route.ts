@@ -27,10 +27,10 @@ export async function POST(request: Request) {
   const cleanSecret = String(activationSecret).trim();
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanName = String(fullName).trim();
-  const cleanSlug = String(slug).trim().toLowerCase().replace(/\\s+/g, '-');
+  const cleanSlug = String(slug).trim().toLowerCase().replace(/\s+/g, '-');
   const cleanType = String(profileType).toUpperCase();
 
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cleanEmail) || cleanEmail.length > 254 ||
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || cleanEmail.length > 254 ||
       cleanName.length < 2 || cleanName.length > 120 || cleanSlug.length < 2 || cleanSlug.length > 50 ||
       !SLUG_RE.test(cleanSlug) || (cleanType !== 'PROFESSIONAL' && cleanType !== 'PERSONAL') ||
       cleanCode.length > 64 || cleanSecret.length < 20 || cleanSecret.length > 200) {
