@@ -64,8 +64,8 @@ test("vCard rejects requests without a valid viewer session", () => {
 
 test("activation is rate-limited before the database operation", () => {
   const source = read("app/api/activate/route.ts");
-  const rateLimitIndex = source.indexOf("checkRateLimit");
-  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card'");
+  const rateLimitIndex = source.indexOf("if (!(await checkRateLimit");
+  const rpcIndex = source.indexOf("supabaseAdmin.rpc('create_activation_request'");
   assert.ok(rateLimitIndex >= 0);
   assert.ok(rpcIndex >= 0);
   assert.ok(rateLimitIndex < rpcIndex);
