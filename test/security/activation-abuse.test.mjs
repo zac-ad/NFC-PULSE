@@ -49,13 +49,13 @@ test("finalization callback exchanges Auth code and verifies session identity", 
 
 test("activation request RPC validates card and creates pending request without claiming it", () => {
   const source = read("supabase/migrations/20261121091000_activation_request_rpc.sql");
-  assert.match(source, /create_activation_request/i);
-  assert.match(source, /status.*UNCLAIMED/i);
-  assert.match(source, /PENDING_EMAIL/i);
-  assert.match(source, /interval '30 minutes'/i);
-  assert.doesNotMatch(source, /UPDATE public\.hardware_cards\s+SET status\s*=\s*'ACTIVE'/i);
+  const requestRpc = source.split("CREATE OR REPLACE FUNCTION public.finalize_card_activation")[0];
+  assert.match(requestRpc, /create_activation_request/i);
+  assert.match(requestRpc, /status.*UNCLAIMED/i);
+  assert.match(requestRpc, /PENDING_EMAIL/i);
+  assert.match(requestRpc, /interval '30 minutes'/i);
+  assert.doesNotMatch(requestRpc, /SET status\s*=\s*'ACTIVE'/i);
 });
-
 test("finalization checks email verification and claims only in finalization RPC", () => {
   const source = read("supabase/migrations/20261121091000_activation_request_rpc.sql");
   assert.match(source, /email_confirmed_at/i);
