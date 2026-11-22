@@ -56,23 +56,28 @@ export async function GET(request: Request) {
     return failed;
   }
 
+  const retryRedirect = (reason: string) => {
+    const target = new URL('/activate', request.url);
+    target.searchParams.set('activation', reason);
+    target.searchParams.set('request_id', activationRequestId);
+    const response = NextResponse.redirect(target);
+    clearActivationCookie(response);
+    return response;
+  };
+
   const { data, error: finalizeError } = await supabaseAdmin.rpc('finalize_card_activation', {
     p_request_id: activationRequestId,
     p_auth_user_id: userData.user.id,
   });
   if (finalizeError) {
     console.error('Activation finalization RPC failed:', finalizeError.message);
-    const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
-    clearActivationCookie(failed);
-    return failed;
+    return retryRedirect('retry');
   }
 
   const result = data as { success?: boolean; error?: string };
   if (!result?.success) {
     console.error('Activation finalization rejected:', result?.error || 'Unknown activation error');
-    const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
-    clearActivationCookie(failed);
-    return failed;
+    return retryRedirect('retry');
   }
 
   const success = NextResponse.redirect(new URL('/dashboard?activated=1', request.url));
