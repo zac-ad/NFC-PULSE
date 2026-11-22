@@ -44,7 +44,7 @@ test("finalization callback exchanges Auth code and verifies session identity", 
   assert.match(source, /supabase\.auth\.getUser\(\)/);
   assert.match(source, /pulse_activation_request/);
   assert.match(source, /finalize_card_activation/);
-  assert.match(source, /cookies\.delete\('pulse_activation_request'\)/);
+  assert.match(source, /clearActivationCookie\(success\)/);
 });
 
 test("activation request RPC validates card and creates pending request without claiming it", () => {
