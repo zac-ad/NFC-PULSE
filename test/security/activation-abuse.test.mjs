@@ -89,3 +89,12 @@ test("rate limiter fails closed when database check errors", () => {
   assert.match(source, /if \(error\)/);
   assert.match(source, /return false/);
 });
+
+
+test("verified activation page suspends search-param content for static rendering", () => {
+  const source = read("app/activate/verified/page.tsx");
+  assert.match(source, /import \\{[^}]*Suspense[^}]*\\} from 'react'/);
+  assert.match(source, /function ActivationVerifiedContent\\(\\)/);
+  assert.match(source, /<Suspense fallback=/);
+  assert.match(source, /<ActivationVerifiedContent \\/>/);
+});
