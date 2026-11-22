@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not start activation. Please try again.' }, { status: 503 });
   }
   const requestResult = requestData as { success?: boolean; request_id?: string; error?: string };
-  if (!requestResult?.success || !requestResult.request_id) {
+  if (!requestResult?.success || !requestData.request_id) {
     return NextResponse.json({ error: requestResult?.error || 'Card could not be verified.' }, { status: 400 });
   }
 
