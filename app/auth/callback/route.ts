@@ -8,22 +8,30 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get('code');
   if (!code) return NextResponse.redirect(new URL('/portal', request.url));
 
+  const clearActivationCookie = (response: NextResponse) => {
+    response.cookies.set('pulse_activation_request', '', {
+      httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
+      path: '/auth/callback', maxAge: 0,
+    });
+    return response;
+  };
+
   const supabase = await createSupabaseServerClient();
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) {
     console.error('Auth callback exchange failed:', exchangeError.message);
-    return NextResponse.redirect(new URL('/portal?auth=failed', request.url));
+    return clearActivationCookie(NextResponse.redirect(new URL('/portal?auth=failed', request.url)));
   }
 
   const cookieStore = await cookies();
   const activationRequestId = cookieStore.get('pulse_activation_request')?.value;
-  if (!activationRequestId) return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (!activationRequestId) return NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user?.id || !userData.user.email) {
     console.error('Activation callback could not verify Auth user.');
     const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
-    failed.cookies.delete('pulse_activation_request');
+    clearActivationCookie(failed);
     return failed;
   }
 
@@ -47,6 +55,6 @@ export async function GET(request: Request) {
   }
 
   const success = NextResponse.redirect(new URL('/dashboard?activated=1', request.url));
-  success.cookies.delete('pulse_activation_request');
+  clearActivationCookie(success);
   return success;
 }
