@@ -25,7 +25,17 @@ export async function GET(request: Request) {
 
   const cookieStore = await cookies();
   const activationRequestId = cookieStore.get('pulse_activation_request')?.value;
-  if (!activationRequestId) return NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
+  const activationFlow = requestUrl.searchParams.get('flow') === 'activation';
+  if (!activationRequestId) {
+    if (activationFlow) {
+      return NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
+    }
+    const requestedNext = requestUrl.searchParams.get('next') || '/dashboard';
+    const safeNext = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+      ? requestedNext
+      : '/dashboard';
+    return NextResponse.redirect(new URL(safeNext, request.url));
+  }
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user?.id || !userData.user.email) {
