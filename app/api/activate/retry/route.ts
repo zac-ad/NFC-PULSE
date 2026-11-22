@@ -26,7 +26,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Please sign in and verify your email before retrying activation.' }, { status: 401 });
   }
 
-  if (!(await checkRateLimit(`activation-retry:${user.id}:${ip}`, 5, 600))) {
+  if (!(await checkRateLimit(`activation-retry-user:${user.id}`, 5, 600)) ||
+      !(await checkRateLimit(`activation-retry-ip:${ip}`, 15, 600))) {
     return NextResponse.json({ error: 'Too many attempts. Please wait and try again.' }, { status: 429 });
   }
 
