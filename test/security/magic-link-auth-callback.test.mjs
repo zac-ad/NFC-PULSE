@@ -4,12 +4,14 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 
-test("magic-link callback exchanges the Supabase auth code before dashboard redirect", () => {
+test("magic-link callback exchanges the Supabase auth code before safe redirect", () => {
   const callback = read("app/auth/callback/route.ts");
 
   assert.match(callback, /searchParams\.get\(["']code["']\)/);
   assert.match(callback, /exchangeCodeForSession\(code\)/);
-  assert.match(callback, /new URL\(["']\/dashboard["'], request\.url\)/);
+  assert.match(callback, /requestedNext = requestUrl\.searchParams\.get\('next'\) \|\| '\/dashboard'/);
+  assert.match(callback, /requestedNext\.startsWith\('\/'\) && !requestedNext\.startsWith\('\/\/'\)/);
+  assert.match(callback, /new URL\(safeNext, request\.url\)/);
 });
 
 test("magic-link callers use the server auth callback", () => {
