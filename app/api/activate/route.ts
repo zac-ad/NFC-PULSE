@@ -1,9 +1,10 @@
 // Email-verified activation request endpoint. Cards remain unclaimed until callback finalization.
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashActivationSecret } from '@/lib/activationSecret';
+import { Resend } from 'resend';
+import { createActivationVerificationToken, hashActivationVerificationToken } from '@/lib/activationVerificationToken';
 
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -55,37 +56,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: requestResult?.error || 'Card could not be verified.' }, { status: 400 });
   }
 
-  // Create an unconfirmed Auth identity if the email is new. Existing identities are retained.
-  const { error: createUserError } = await supabaseAdmin.auth.admin.createUser({
-    email: cleanEmail,
-    email_confirm: false,
+  // Email proof is handled by PULSE-owned opaque tokens; no Auth identity/session
+  // is created during request submission.
+  const appUrl = process.env.PULSE_APP_URL?.trim();
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const from = process.env.PULSE_ACTIVATION_FROM?.trim();
+  if (!appUrl || !resendApiKey || !from) {
+    console.error('Activation email configuration is incomplete.');
+    return NextResponse.json({ error: 'Activation email is temporarily unavailable. Please try again later.' }, { status: 503 });
+  }
+
+  const token = createActivationVerificationToken();
+  const tokenHash = hashActivationVerificationToken(token);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const { data: issueData, error: issueError } = await supabaseAdmin.rpc('issue_activation_verification_token', {
+    p_request_id: requestResult.request_id,
+    p_token_hash: tokenHash,
+    p_token_expiry: expiresAt,
   });
-  if (createUserError && !/already registered|already exists|user already/i.test(createUserError.message)) {
-    console.error('Pending Auth user creation failed:', createUserError.message);
+  const issueResult = issueData as { success?: boolean; error?: string } | null;
+  if (issueError || !issueResult?.success) {
+    console.error('Activation verification token issuance failed:', issueError?.message || issueResult?.error || 'Unknown error');
+    return NextResponse.json({ error: 'Could not start email verification. Please try again.' }, { status: 503 });
+  }
+
+  const verifyUrl = new URL('/activate/verify', appUrl);
+  verifyUrl.searchParams.set('token', token);
+  const resend = new Resend(resendApiKey);
+  const { error: emailError } = await resend.emails.send({
+    from,
+    to: cleanEmail,
+    subject: 'Verify your PULSE card activation',
+    text: `Verify your email to continue activating your PULSE card. This link expires in 30 minutes: ${verifyUrl.toString()}\n\nIf you did not request this, you can ignore this email.`,
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Verify your email</h2><p>Use this link to continue activating your PULSE card. It expires in 30 minutes.</p><p><a href="${verifyUrl.toString()}">Verify email and continue</a></p><p>If you did not request this, you can ignore this email.</p></div>`,
+  });
+
+  if (emailError) {
+    console.error('Activation email delivery failed:', emailError.message);
+    // Revoke the token so a failed delivery cannot leave a usable secret behind.
+    await supabaseAdmin.from('activation_verification_tokens')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('request_id', requestResult.request_id)
+      .eq('token_hash', tokenHash)
+      .is('consumed_at', null);
     return NextResponse.json({ error: 'Could not send verification email. Please try again.' }, { status: 503 });
   }
 
-  const authClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
-    { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
-  );
-  const redirectTo = new URL('/auth/callback?flow=activation&next=%2Fdashboard', request.url);
-  redirectTo.searchParams.set('request_id', requestResult.request_id);
-  const { error: otpError } = await authClient.auth.signInWithOtp({
-    email: cleanEmail,
-    options: { shouldCreateUser: false, emailRedirectTo: redirectTo.toString() },
-  });
-
-  if (otpError) {
-    console.error('Activation verification email send failed:', otpError.message);
-    return NextResponse.json({ error: 'Could not send verification email. Please try again.' }, { status: 503 });
-  }
-
-  const response = NextResponse.json({ success: true, message: 'Check your email to verify and finish activation.' });
-  response.cookies.set('pulse_activation_request', requestResult.request_id, {
-    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
-    path: '/auth/callback', maxAge: 30 * 60,
-  });
-  return response;
+  return NextResponse.json({ success: true, message: 'Check your email to verify and continue activating your card.' });
 }
