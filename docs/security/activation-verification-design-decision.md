@@ -72,3 +72,15 @@ Recommended direction for implementation:
 - Do not implement the Resend sender until sender-domain/configuration is confirmed. The branch must not depend on production secrets being available during static validation.
 
 This decision avoids the current ephemeral PKCE verifier issue and avoids turning a custom verification token into a login token for an existing account. It is a design recommendation, not yet implementation or integration-test proof.
+
+## Branch implementation audit — 22 November 2026
+
+The latest branch code is not yet aligned with the proposed token design. Confirmed findings:
+
+- `app/api/activate/route.ts` creates an unconfirmed Supabase Auth user **before** email proof. This contradicts the identity-handling decision above; the new-user creation must move behind successful PULSE-token validation.
+- The endpoint sends Supabase `signInWithOtp` using a server-created client with `persistSession: false`. No PKCE verifier is persisted by that temporary client, so the cross-device callback redemption is not a reliable activation foundation.
+- The callback still exchanges a Supabase Auth code and then finalizes card activation. This is the current OTP-based architecture, not the dedicated PULSE-token verification route.
+- The callback accepts a request ID in the query string and a same-device cookie fallback. The request ID is not email ownership proof; the finalization RPC's verified-email check is a necessary downstream guard but does not solve the above flow issues.
+- Existing users are not explicitly separated into confirmed, unconfirmed, and mismatch cases in the activation endpoint; the broad “already registered/exist” message handling should not be retained in the replacement flow.
+
+**Disposition:** PR #64 remains draft and must not be merged. The next implementation should replace the current OTP/temporary-client path with the dedicated PULSE token design. Before writing that replacement, the exact token-consumption transaction and existing-user activation-resume path need to be designed so verification cannot be replayed and an existing account cannot be silently bound or logged into.
