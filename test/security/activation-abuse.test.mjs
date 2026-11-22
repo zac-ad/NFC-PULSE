@@ -98,3 +98,11 @@ test("verified activation page suspends search-param content for static renderin
   assert.match(source, /<Suspense fallback=/);
   assert.match(source, /<ActivationVerifiedContent \/>/);
 });
+
+test("activation email configuration is validated before creating pending requests", () => {
+  const source = read("app/api/activate/route.ts");
+  assert.ok(source.indexOf("PULSE_APP_URL") < source.indexOf("create_activation_request"));
+  assert.ok(source.indexOf("RESEND_API_KEY") < source.indexOf("create_activation_request"));
+  assert.ok(source.indexOf("PULSE_ACTIVATION_FROM") < source.indexOf("create_activation_request"));
+  assert.match(source, /new URL\('\/activate\/verify', appUrl\)/);
+});
