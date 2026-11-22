@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function ActivationRetryPage() {
+function ActivationRetryContent() {
   const params = useSearchParams();
   const router = useRouter();
   const requestId = params.get('request_id') || '';
@@ -72,5 +72,14 @@ export default function ActivationRetryPage() {
         </Link>
       </div>
     </main>
+  );
+}
+
+
+export default function ActivationRetryPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-[#0a0a0a] text-[#f2f0eb] flex items-center justify-center px-6"><p className="text-sm text-[#f2f0eb]/40">Loading activation recovery…</p></main>}>
+      <ActivationRetryContent />
+    </Suspense>
   );
 }
