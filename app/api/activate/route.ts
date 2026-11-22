@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
     { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
   );
-  const redirectTo = new URL('/auth/callback?next=%2Fdashboard', request.url).toString();
+  const redirectTo = new URL('/auth/callback?flow=activation%26next=%2Fdashboard', request.url).toString();
   const { error: otpError } = await authClient.auth.signInWithOtp({
     email: cleanEmail,
     options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
