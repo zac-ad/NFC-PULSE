@@ -27,7 +27,7 @@ Updated: 2026-11-22
 ## Unverified / next
 - The Vercel build passed for commit `07a4edaaf90e30b64fe4145a24804a85d2d897b3`; this was before the token redesign.
 - Token architecture implementation has not started.
-- Current execution environment exposes GitHub file/commit operations but no local repository shell. I checked common GitHub Actions workflow paths and found no CI workflow configured. Mandatory local typecheck/lint/test/build gates cannot be run before a branch commit, and no CI substitute is currently available. Do not commit implementation until a validation environment or approved equivalent gate is available.
+- GitHub Actions CI is configured in `.github/workflows/pulse-ci.yml` with separate tests, lint, typecheck, and build jobs. The workflow can validate branch commits, but it does not replace required local Next.js documentation review before code changes. The current environment still lacks the local repository shell and installed `node_modules` docs. Use CI results as a post-change gate; do not bypass local-doc prerequisite for code edits.
 - No test suite, typecheck, lint, SQL migration validation, token lifecycle tests, Auth identity-case tests, concurrency/replay tests, or real email configuration checks have been verified.
 - Resend sender/domain configuration is not confirmed. Do not implement delivery as if configuration is available; design a provider abstraction and require env/config verification before live sending.
 
