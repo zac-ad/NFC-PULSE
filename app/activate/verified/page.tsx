@@ -56,7 +56,7 @@ export default function ActivationVerifiedPage() {
             {working ? 'Please wait…' : 'Continue activation'}
           </button>
         )}
-        <Link href="/portal" className="inline-block text-sm text-white/60 underline">Sign in</Link>
+        <Link href={`/portal?return=${encodeURIComponent(`/activate/verified?request=${requestId}`)}`} target="_blank" rel="noreferrer" className="inline-block text-sm text-white/60 underline">Sign in in a new tab</Link>
       </section>
     </main>
   );
