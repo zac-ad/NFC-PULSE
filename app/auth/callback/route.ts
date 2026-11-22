@@ -38,9 +38,14 @@ export async function GET(request: Request) {
   }
 
   const cookieStore = await cookies();
-  const activationRequestId = cookieStore.get('pulse_activation_request')?.value;
-  if (!activationRequestId) {
-    return NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
+  // The email redirect carries the request ID so verification can finish on another device.
+  // The HttpOnly cookie remains a same-device fallback for older links.
+  const activationRequestId = requestUrl.searchParams.get('request_id')
+    || cookieStore.get('pulse_activation_request')?.value;
+  if (!activationRequestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activationRequestId)) {
+    const missing = NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
+    clearActivationCookie(missing);
+    return missing;
   }
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
