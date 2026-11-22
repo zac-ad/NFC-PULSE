@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabaseServerAuth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -16,14 +18,21 @@ export async function GET(request: Request) {
     return response;
   };
 
+  const activationFlow = requestUrl.searchParams.get('flow') === 'activation';
+  const activationRequestId = requestUrl.searchParams.get('request_id');
   const supabase = await createSupabaseServerClient();
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) {
     console.error('Auth callback exchange failed:', exchangeError.message);
+    if (activationFlow && activationRequestId && UUID_RE.test(activationRequestId)) {
+      const recovery = new URL('/activate/retry', request.url);
+      recovery.searchParams.set('activation', 'exchange-failed');
+      recovery.searchParams.set('request_id', activationRequestId);
+      return clearActivationCookie(NextResponse.redirect(recovery));
+    }
     return clearActivationCookie(NextResponse.redirect(new URL('/portal?auth=failed', request.url)));
   }
 
-  const activationFlow = requestUrl.searchParams.get('flow') === 'activation';
   const requestedNext = requestUrl.searchParams.get('next') || '/dashboard';
   const safeNext = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
     ? requestedNext
@@ -42,7 +51,7 @@ export async function GET(request: Request) {
   // The HttpOnly cookie remains a same-device fallback for older links.
   const activationRequestId = requestUrl.searchParams.get('request_id')
     || cookieStore.get('pulse_activation_request')?.value;
-  if (!activationRequestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activationRequestId)) {
+  if (!activationRequestId || !UUID_RE.test(activationRequestId)) {
     const missing = NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
     clearActivationCookie(missing);
     return missing;
