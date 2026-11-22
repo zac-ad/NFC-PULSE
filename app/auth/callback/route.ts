@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   if (finalizeError) {
     console.error('Activation finalization RPC failed:', finalizeError.message);
     const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
-    failed.cookies.delete('pulse_activation_request');
+    clearActivationCookie(failed);
     return failed;
   }
 
