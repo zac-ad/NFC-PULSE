@@ -83,6 +83,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
+  v_token_id UUID;
+  v_request_id UUID;
   v_token RECORD;
   v_request RECORD;
 BEGIN
@@ -90,30 +92,37 @@ BEGIN
     RETURN json_build_object('error', 'Verification link is invalid or expired.');
   END IF;
 
-  SELECT id, request_id, expires_at, consumed_at, revoked_at
-    INTO v_token
+  -- Read the request ID first without locking. Both issue and consume lock request
+  -- before token rows, preventing a request/token lock-order deadlock.
+  SELECT id, request_id INTO v_token_id, v_request_id
     FROM public.activation_verification_tokens
-   WHERE token_hash = p_token_hash
-   FOR UPDATE;
+   WHERE token_hash = p_token_hash;
 
-  IF NOT FOUND OR v_token.consumed_at IS NOT NULL OR v_token.revoked_at IS NOT NULL
-     OR v_token.expires_at <= now() THEN
+  IF NOT FOUND THEN
     RETURN json_build_object('error', 'Verification link is invalid or expired.');
   END IF;
 
   SELECT id, email, status, expires_at
     INTO v_request
     FROM public.activation_requests
-   WHERE id = v_token.request_id
-   FOR UPDATE;
+   WHERE id = v_request_id
+   FOR UPDATE NOWAIT;
 
   IF NOT FOUND OR v_request.status <> 'PENDING_EMAIL' OR v_request.expires_at <= now() THEN
-    UPDATE public.activation_verification_tokens
-       SET revoked_at = now()
-     WHERE id = v_token.id AND consumed_at IS NULL;
-    IF FOUND AND v_request.id IS NOT NULL AND v_request.status = 'PENDING_EMAIL' THEN
-      UPDATE public.activation_requests SET status = 'EXPIRED' WHERE id = v_request.id;
-    END IF;
+    RETURN json_build_object('error', 'Verification link is invalid or expired.');
+  END IF;
+
+  SELECT id, request_id, expires_at, consumed_at, revoked_at
+    INTO v_token
+    FROM public.activation_verification_tokens
+   WHERE id = v_token_id
+     AND token_hash = p_token_hash
+   FOR UPDATE NOWAIT;
+
+  IF NOT FOUND OR v_token.request_id <> v_request.id
+     OR v_token.consumed_at IS NOT NULL
+     OR v_token.revoked_at IS NOT NULL
+     OR v_token.expires_at <= now() THEN
     RETURN json_build_object('error', 'Verification link is invalid or expired.');
   END IF;
 
