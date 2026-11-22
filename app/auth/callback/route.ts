@@ -23,18 +23,24 @@ export async function GET(request: Request) {
     return clearActivationCookie(NextResponse.redirect(new URL('/portal?auth=failed', request.url)));
   }
 
+  const activationFlow = requestUrl.searchParams.get('flow') === 'activation';
+  const requestedNext = requestUrl.searchParams.get('next') || '/dashboard';
+  const safeNext = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+    ? requestedNext
+    : '/dashboard';
+
+  // Standard sign-in links must never trigger card activation, even if a stale
+  // activation-request cookie remains in this browser.
+  if (!activationFlow) {
+    const standardLogin = NextResponse.redirect(new URL(safeNext, request.url));
+    clearActivationCookie(standardLogin);
+    return standardLogin;
+  }
+
   const cookieStore = await cookies();
   const activationRequestId = cookieStore.get('pulse_activation_request')?.value;
-  const activationFlow = requestUrl.searchParams.get('flow') === 'activation';
   if (!activationRequestId) {
-    if (activationFlow) {
-      return NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
-    }
-    const requestedNext = requestUrl.searchParams.get('next') || '/dashboard';
-    const safeNext = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
-      ? requestedNext
-      : '/dashboard';
-    return NextResponse.redirect(new URL(safeNext, request.url));
+    return NextResponse.redirect(new URL('/activate?activation=missing-request', request.url));
   }
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
