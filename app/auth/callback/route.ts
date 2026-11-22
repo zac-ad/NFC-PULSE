@@ -50,7 +50,7 @@ export async function GET(request: Request) {
   if (!result?.success) {
     console.error('Activation finalization rejected:', result?.error || 'Unknown activation error');
     const failed = NextResponse.redirect(new URL('/activate?activation=failed', request.url));
-    failed.cookies.delete('pulse_activation_request');
+    clearActivationCookie(failed);
     return failed;
   }
 
