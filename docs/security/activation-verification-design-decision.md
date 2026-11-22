@@ -38,6 +38,17 @@ The interface should explain expired links and resend actions in plain language.
 7. Mark the verification token consumed and request completed transactionally. Ensure concurrency and retry behavior are safe.
 8. Provide clear success, expired, already-used, and resend states without leaking whether a card/email/account exists.
 
+## Identity handling decision
+Email proof from a PULSE activation token proves control of the request email address, but it does not automatically prove the user can access an existing PULSE Auth identity or safely establish a logged-in session.
+
+- **No Auth user for the email:** only create the Auth identity after the PULSE email token has been successfully validated. Confirming the email during creation is permitted only as a direct consequence of that validated proof; never create/confirm on the initial activation-request submission.
+- **Existing confirmed Auth user with exact normalized email:** do not silently replace credentials, create a duplicate, or automatically log the user into that account. Complete the card/account binding only if the flow can establish a safe authenticated identity/session for that existing user; otherwise require the existing sign-in flow after email verification and provide a clear resume step.
+- **Existing unconfirmed Auth user with exact normalized email:** after token proof, confirming the email may be considered, but do not change password, metadata, or other identity properties. Confirm only the exact matched user and ensure the activation can resume without an unsafe account-binding shortcut.
+- **Email mismatch, conflicting account binding, or ambiguous identity:** stop safely; do not bind or confirm. Give a generic recovery message.
+- Account binding must remain a separate, validated step and the activation finalization RPC must continue enforcing the email and Auth-user match.
+
+These cases require integration tests and review against the actual Supabase Auth configuration before implementation is considered safe.
+
 ## Implementation and validation gates
 - Confirm Resend sender configuration and required environment variables without exposing secrets.
 - Review Supabase Admin APIs for safely creating or confirming identities after proof of email ownership.
