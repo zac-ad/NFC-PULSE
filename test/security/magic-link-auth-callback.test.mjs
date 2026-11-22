@@ -30,5 +30,8 @@ test("standard magic-link login cannot trigger activation from a stale cookie", 
   assert.match(callback, /if \(!activationFlow\)/);
   assert.match(callback, /clearActivationCookie\(standardLogin\)/);
   assert.match(callback, /if \(!activationRequestId\)/);
+  assert.match(callback, /searchParams\.get\('request_id'\)/);
+  assert.match(callback, /cookieStore\.get\('pulse_activation_request'\)/);
+  assert.match(callback, /activationRequestId.*request_id[\s\S]*pulse_activation_request/);
   assert.match(callback, /activation=missing-request/);
 });
