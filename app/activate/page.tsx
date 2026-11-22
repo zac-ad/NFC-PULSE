@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 
 // Slug rules: lowercase letters, numbers, hyphens only. No leading/trailing hyphens.
@@ -19,7 +18,6 @@ function sanitizeSlug(raw: string): string {
 function ActivateContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const supabase = createSupabaseBrowserClient();
 
   const codeFromUrl = searchParams.get('code')?.toUpperCase().trim() || '';
   const typeParam = searchParams.get('type')?.toUpperCase();
