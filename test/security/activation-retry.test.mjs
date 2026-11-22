@@ -14,7 +14,8 @@ test('activation retry requires a UUID request id and verified authenticated use
 
 test('activation retry rate-limits and only calls atomic finalization RPC', () => {
   const source = read('app/api/activate/retry/route.ts');
-  assert.match(source, /activation-retry:/);
+  assert.match(source, /activation-retry-user:/);
+  assert.match(source, /activation-retry-ip:/);
   assert.match(source, /finalize_card_activation/);
   assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
 });
