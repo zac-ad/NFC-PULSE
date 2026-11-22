@@ -19,15 +19,15 @@ export async function GET(request: Request) {
   };
 
   const activationFlow = requestUrl.searchParams.get('flow') === 'activation';
-  const activationRequestId = requestUrl.searchParams.get('request_id');
+  const earlyActivationRequestId = requestUrl.searchParams.get('request_id');
   const supabase = await createSupabaseServerClient();
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) {
     console.error('Auth callback exchange failed:', exchangeError.message);
-    if (activationFlow && activationRequestId && UUID_RE.test(activationRequestId)) {
+    if (activationFlow && earlyActivationRequestId && UUID_RE.test(earlyActivationRequestId)) {
       const recovery = new URL('/activate/retry', request.url);
       recovery.searchParams.set('activation', 'exchange-failed');
-      recovery.searchParams.set('request_id', activationRequestId);
+      recovery.searchParams.set('request_id', earlyActivationRequestId);
       return clearActivationCookie(NextResponse.redirect(recovery));
     }
     return clearActivationCookie(NextResponse.redirect(new URL('/portal?auth=failed', request.url)));
