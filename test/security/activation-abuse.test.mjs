@@ -6,14 +6,12 @@ const read = (path) => readFileSync(new URL("../../" + path, import.meta.url), "
 
 test("activation request is rate limited before parsing input", () => {
   const source = read("app/api/activate/route.ts");
-  const limiter = source.indexOf("checkRateLimit");
-  const parse = source.indexOf("request.json");
-  assert.ok(limiter >= 0);
-  assert.ok(parse > limiter);
+  assert.ok(source.indexOf("checkRateLimit") >= 0);
+  assert.ok(source.indexOf("request.json") > source.indexOf("checkRateLimit"));
   assert.match(source, /activation-request:\$\{ip\}/);
 });
 
-test("activation request validates and normalizes inputs before pending RPC", () => {
+test("activation request validates and normalizes input before request RPC", () => {
   const source = read("app/api/activate/route.ts");
   assert.match(source, /cleanCode.*toUpperCase/);
   assert.match(source, /cleanEmail.*toLowerCase/);
@@ -22,51 +20,68 @@ test("activation request validates and normalizes inputs before pending RPC", ()
   assert.match(source, /create_activation_request/);
 });
 
-test("request API does not activate or mutate a hardware card directly", () => {
+test("activation request does not create an Auth identity or browser session", () => {
   const source = read("app/api/activate/route.ts");
-  assert.doesNotMatch(source, /activate_card/);
-  assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
-  assert.match(source, /signInWithOtp/);
-  assert.match(source, /email_confirm:\s*false/);
+  assert.doesNotMatch(source, /createUser/);
+  assert.doesNotMatch(source, /signInWithOtp/);
+  assert.doesNotMatch(source, /email_confirm/);
+  assert.doesNotMatch(source, /pulse_activation_request/);
 });
 
-test("pending activation binds request id in HttpOnly callback cookie", () => {
-  const source = read("app/api/activate/route.ts");
-  assert.match(source, /pulse_activation_request/);
-  assert.match(source, /httpOnly:\s*true/);
-  assert.match(source, /path:\s*'\/auth\/callback'/);
-  assert.match(source, /maxAge:\s*30\s*\*\s*60/);
-  assert.match(source, /response\.cookies\.set\([\s\S]*requestResult\.request_id/);
-  assert.doesNotMatch(source, /response\.cookies\.set\([\s\S]*requestData\.request_id/);
-  assert.match(source, /searchParams\.set\(\x27request_id\x27, requestResult\.request_id\)/);
+test("verification route hashes opaque token and rate limits requests", () => {
+  const source = read("app/api/activate/verify/route.ts");
+  assert.match(source, /checkRateLimit/);
+  assert.match(source, /hashActivationVerificationToken/);
+  assert.match(source, /consume_activation_verification_token/);
+  assert.match(source, /Cache-Control.*no-store/);
+  assert.match(source, /Referrer-Policy.*no-referrer/);
 });
 
-test("finalization callback exchanges Auth code and verifies session identity", () => {
-  const source = read("app/auth/callback/route.ts");
-  assert.match(source, /exchangeCodeForSession\(code\)/);
+test("verification UI requires explicit POST action; GET alone cannot redeem token", () => {
+  const source = read("app/activate/verify/page.tsx");
+  assert.match(source, /fetch\('\/api\/activate\/verify'/);
+  assert.match(source, /method: 'POST'/);
+  assert.match(source, /router\.replace\('\/activate\/verify'/);
+  assert.match(source, /Verify email/);
+});
+
+test("resume API derives identity from server-verified auth session", () => {
+  const source = read("app/api/activate/resume/route.ts");
   assert.match(source, /supabase\.auth\.getUser\(\)/);
-  assert.match(source, /pulse_activation_request/);
-  assert.match(source, /finalize_card_activation/);
-  assert.match(source, /clearActivationCookie\(success\)/);
+  assert.match(source, /user\.email_confirmed_at/);
+  assert.match(source, /p_auth_user_id:\s*user\.id/);
+  assert.doesNotMatch(source, /p_auth_user_id:\s*request/);
 });
 
-test("activation request RPC validates card and creates pending request without claiming it", () => {
-  const source = read("supabase/migrations/20261121091000_activation_request_rpc.sql");
-  const requestRpc = source.split("CREATE OR REPLACE FUNCTION public.finalize_card_activation")[0];
-  assert.match(requestRpc, /create_activation_request/i);
-  assert.match(requestRpc, /status.*UNCLAIMED/i);
-  assert.match(requestRpc, /PENDING_EMAIL/i);
-  assert.match(requestRpc, /interval '30 minutes'/i);
-  assert.doesNotMatch(requestRpc, /SET status\s*=\s*'ACTIVE'/i);
+test("finalization migration requires token-verified awaiting-sign-in state", () => {
+  const source = read("supabase/migrations/20261122141000_activation_finalize_requires_verified_email.sql");
+  assert.match(source, /status <> 'AWAITING_SIGN_IN'/);
+  assert.match(source, /email_confirmed_at/);
+  assert.match(source, /finalize_card_activation/);
 });
-test("finalization checks email verification and claims only in finalization RPC", () => {
-  const source = read("supabase/migrations/20261121091000_activation_request_rpc.sql");
-  assert.match(source, /email_confirmed_at/i);
-  assert.match(source, /finalize_card_activation/i);
-  assert.match(source, /status\s*=\s*'ACTIVE'/i);
-  assert.match(source, /activation_requests/i);
-  assert.match(source, /REVOKE EXECUTE/i);
-  assert.match(source, /GRANT EXECUTE.*service_role/i);
+
+test("verification tokens use cryptographic randomness and hashes", () => {
+  const source = read("lib/activationVerificationToken.ts");
+  assert.match(source, /randomBytes\(32\)/);
+  assert.match(source, /createHash\('sha256'\)/);
+  assert.match(source, /base64url/);
+});
+
+test("token lifecycle SQL provides single-use and revocation controls", () => {
+  const source = read("supabase/migrations/20261122140000_activation_verification_tokens.sql");
+  assert.match(source, /activation_verification_tokens/);
+  assert.match(source, /consumed_at/);
+  assert.match(source, /revoked_at/);
+  assert.match(source, /FOR UPDATE NOWAIT/);
+  assert.match(source, /AWAITING_SIGN_IN/);
+  assert.match(source, /GRANT EXECUTE.*service_role/);
+});
+
+test("legacy auth callback cannot finalize card activation", () => {
+  const source = read("app/auth/callback/route.ts");
+  assert.match(source, /flow.*activation/);
+  assert.match(source, /activation=legacy-link/);
+  assert.doesNotMatch(source, /finalize_card_activation/);
 });
 
 test("rate limiter fails closed when database check errors", () => {
