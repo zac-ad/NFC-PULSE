@@ -57,7 +57,7 @@ export async function GET(request: Request) {
   }
 
   const retryRedirect = (reason: string) => {
-    const target = new URL('/activate', request.url);
+    const target = new URL('/activate/retry', request.url);
     target.searchParams.set('activation', reason);
     target.searchParams.set('request_id', activationRequestId);
     const response = NextResponse.redirect(target);
