@@ -27,3 +27,14 @@ Migration `20261121090000_email_verified_activation_requests.sql` adds a server-
 
 ## Current scope
 This branch contains only the database table groundwork. The activation API, callback, finalization RPC, UI, and tests are not yet changed. The migration is intentionally not production-ready on its own.
+
+## Updated identity policy (design review)
+
+The earlier "never auto-confirm users" note is refined by the current design decision: email confirmation may occur only after successful PULSE-owned verification-token proof, and only for the exact Auth identity matched to that normalized email. The proof must not create an authenticated session by itself.
+
+- New identity: create/confirm only after token proof; then require a safe sign-in/session step.
+- Existing confirmed identity: do not modify credentials or automatically sign in. Require normal sign-in, then resume activation using a verified, short-lived pending request.
+- Existing unconfirmed identity: confirmation may occur after proof for that exact email; do not alter password, metadata, or unrelated identity fields.
+- Any mismatch or ambiguous account state: stop without binding.
+
+This is still a design checkpoint; current API/callback code has not been replaced, and the branch is not release-ready.
