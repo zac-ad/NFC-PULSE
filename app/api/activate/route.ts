@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ success: true, message: 'Check your email to verify and finish activation.' });
-  response.cookies.set('pulse_activation_request', requestData.request_id, {
+  response.cookies.set('pulse_activation_request', requestResult.request_id, {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
     path: '/auth/callback', maxAge: 30 * 60,
   });
