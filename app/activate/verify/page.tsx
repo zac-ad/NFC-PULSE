@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function VerifyActivationContent() {
@@ -68,5 +68,5 @@ function VerifyActivationContent() {
 }
 
 export default function VerifyActivationPage() {
-  return <VerifyActivationContent />;
+  return <Suspense fallback={<main className="min-h-screen bg-[#0a0a0a]" />}><VerifyActivationContent /></Suspense>;
 }
