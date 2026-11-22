@@ -59,3 +59,16 @@ These cases require integration tests and review against the actual Supabase Aut
 
 ## Release boundary
 This design document is branch-only. Do not apply migrations to production, merge PR, or deploy without explicit approval.
+## Auth/session decision after API review
+
+Supabase Auth Admin can confirm an exact user email via `updateUserById(..., { email_confirm: true })`, but this administrative confirmation is not itself a user session. Treating email proof as an automatic login to an existing account is not safe.
+
+Recommended direction for implementation:
+- Use a PULSE-owned email verification token as proof of email control, with hashed storage, expiry, single-use consumption, and request/email/card binding.
+- After proof, create or confirm the Auth identity only for a new activation identity, and do not automatically sign into or modify an existing confirmed identity.
+- For an existing confirmed identity, route the user to normal sign-in and provide a safe activation-resume path tied to the verified request; the final binding must require the authenticated user's exact email and ID.
+- For a new identity, create/confirm it only after token proof, then use a separate normal sign-in/session-establishment step. Do not assume Admin API confirmation returns a session.
+- Keep email verification and card finalization distinct: verification is one-time; finalization remains an atomic RPC that re-checks request expiry/state, card ownership/credential, email, Auth ID, account state, and slug.
+- Do not implement the Resend sender until sender-domain/configuration is confirmed. The branch must not depend on production secrets being available during static validation.
+
+This decision avoids the current ephemeral PKCE verifier issue and avoids turning a custom verification token into a login token for an existing account. It is a design recommendation, not yet implementation or integration-test proof.
