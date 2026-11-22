@@ -38,6 +38,7 @@ test("pending activation binds request id in HttpOnly callback cookie", () => {
   assert.match(source, /maxAge:\s*30\s*\*\s*60/);
   assert.match(source, /response\.cookies\.set\([\s\S]*requestResult\.request_id/);
   assert.doesNotMatch(source, /response\.cookies\.set\([\s\S]*requestData\.request_id/);
+  assert.match(source, /searchParams\.set\(\x27request_id\x27, requestResult\.request_id\)/);
 });
 
 test("finalization callback exchanges Auth code and verifies session identity", () => {
