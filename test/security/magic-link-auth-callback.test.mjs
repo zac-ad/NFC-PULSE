@@ -24,14 +24,10 @@ test("magic-link callers use the server auth callback", () => {
   }
 });
 
-test("standard magic-link login cannot trigger activation from a stale cookie", () => {
+test("legacy activation callback cannot finalize or bind a card", () => {
   const callback = read("app/auth/callback/route.ts");
-  assert.match(callback, /searchParams\.get\('flow'\) === 'activation'/);
-  assert.match(callback, /if \(!activationFlow\)/);
-  assert.match(callback, /clearActivationCookie\(standardLogin\)/);
-  assert.match(callback, /if \(!activationRequestId \|\|/);
-  assert.match(callback, /searchParams\.get\('request_id'\)/);
-  assert.match(callback, /cookieStore\.get\('pulse_activation_request'\)/);
-  assert.match(callback, /activationRequestId.*request_id[\s\S]*pulse_activation_request/);
-  assert.match(callback, /activation=missing-request/);
+  assert.match(callback, /flow.*activation/);
+  assert.match(callback, /activation=legacy-link/);
+  assert.doesNotMatch(callback, /finalize_card_activation/);
+  assert.doesNotMatch(callback, /pulse_activation_request/);
 });
