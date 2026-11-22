@@ -38,6 +38,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Please check the activation details and try again.' }, { status: 400 });
   }
 
+  // Validate delivery configuration before creating a pending activation request.
+  const appUrl = process.env.PULSE_APP_URL?.trim();
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const from = process.env.PULSE_ACTIVATION_FROM?.trim();
+  if (!appUrl || !resendApiKey || !from) {
+    console.error('Activation email configuration is incomplete.');
+    return NextResponse.json({ error: 'Activation email is temporarily unavailable. Please try again later.' }, { status: 503 });
+  }
+  let verifyUrl: URL;
+  try { verifyUrl = new URL('/activate/verify', appUrl); } catch {
+    console.error('Activation email configuration contains an invalid app URL.');
+    return NextResponse.json({ error: 'Activation email is temporarily unavailable. Please try again later.' }, { status: 503 });
+  }
+
   const { data: requestData, error: requestError } = await supabaseAdmin.rpc('create_activation_request', {
     p_card_code: cleanCode,
     p_activation_secret_hash: hashActivationSecret(cleanSecret),
@@ -56,16 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: requestResult?.error || 'Card could not be verified.' }, { status: 400 });
   }
 
-  // Email proof is handled by PULSE-owned opaque tokens; no Auth identity/session
-  // is created during request submission.
-  const appUrl = process.env.PULSE_APP_URL?.trim();
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const from = process.env.PULSE_ACTIVATION_FROM?.trim();
-  if (!appUrl || !resendApiKey || !from) {
-    console.error('Activation email configuration is incomplete.');
-    return NextResponse.json({ error: 'Activation email is temporarily unavailable. Please try again later.' }, { status: 503 });
-  }
-
+  // Email proof is handled by PULSE-owned opaque tokens; no Auth identity/session is created during request submission.
   const token = createActivationVerificationToken();
   const tokenHash = hashActivationVerificationToken(token);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -80,7 +85,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not start email verification. Please try again.' }, { status: 503 });
   }
 
-  const verifyUrl = new URL('/activate/verify', appUrl);
   verifyUrl.searchParams.set('token', token);
   const resend = new Resend(resendApiKey);
   const { error: emailError } = await resend.emails.send({
