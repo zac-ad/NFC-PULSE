@@ -21,3 +21,12 @@ test("magic-link callers use the server auth callback", () => {
     assert.match(source, /\/auth\/callback\?next=%2Fdashboard/);
   }
 });
+
+test("standard magic-link login cannot trigger activation from a stale cookie", () => {
+  const callback = read("app/auth/callback/route.ts");
+  assert.match(callback, /searchParams\.get\('flow'\) === 'activation'/);
+  assert.match(callback, /if \(!activationFlow\)/);
+  assert.match(callback, /clearActivationCookie\(standardLogin\)/);
+  assert.match(callback, /if \(!activationRequestId\)/);
+  assert.match(callback, /activation=missing-request/);
+});
