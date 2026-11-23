@@ -5,7 +5,6 @@ import {
   createAdminSession,
   getAdminCookieName,
   adminCookieOptions,
-  SESSION_DURATION_MS,
 } from '@/lib/adminAuth';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 

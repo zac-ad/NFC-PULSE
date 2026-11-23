@@ -82,6 +82,7 @@ export default function AdminDashboardClient() {
 
   useEffect(() => {
     document.title = 'PULSE | Fleet Command';
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCards();
     fetchActions();
   }, []);
@@ -328,8 +329,6 @@ export default function AdminDashboardClient() {
     unclaimed: cards.filter(c => c.status === 'UNCLAIMED').length,
     deactivated: cards.filter(c => c.status === 'DEACTIVATED').length,
   };
-
-  const inputCls = 'bg-[#141414] border border-white/[0.08] text-white rounded-xl px-4 py-3 text-[13px] placeholder:text-white/20 focus:outline-none focus:border-white/20';
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">

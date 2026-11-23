@@ -53,8 +53,8 @@ function ActivationRetryContent() {
         <div className="w-10 h-10 rounded-full border border-white/10 bg-[#141414] flex items-center justify-center mx-auto"><div className="w-2 h-2 rounded-full bg-[#f2f0eb]/60" /></div>
         <div className="space-y-3">
           <p className="font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">Activation recovery</p>
-          <h1 className="font-serif text-2xl">You're almost there.</h1>
-          <p className="text-[14px] text-[#f2f0eb]/40 leading-relaxed">Your email verification may be complete, but we couldn't finish activating your card. Sign in with the same email used for activation, then retry.</p>
+          <h1 className="font-serif text-2xl">You&apos;re almost there.</h1>
+          <p className="text-[14px] text-[#f2f0eb]/40 leading-relaxed">Your email verification may be complete, but we couldn&apos;t finish activating your card. Sign in with the same email used for activation, then retry.</p>
         </div>
         {error && <div className="px-4 py-3 rounded-xl bg-red-950/30 border border-red-900/50 text-red-400 text-[13px]" role="alert">{error}</div>}
         <button type="button" onClick={retry} disabled={loading || !requestId} aria-busy={loading} className="w-full py-3.5 rounded-xl bg-[#f2f0eb] text-black text-[13px] font-semibold hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed">{loading ? 'Retrying activation…' : 'Retry activation'}</button>

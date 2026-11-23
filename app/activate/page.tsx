@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 
 // Slug rules: lowercase letters, numbers, hyphens only. No leading/trailing hyphens.
@@ -19,7 +18,6 @@ function sanitizeSlug(raw: string): string {
 function ActivateContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const supabase = createSupabaseBrowserClient();
 
   const codeFromUrl = searchParams.get('code')?.toUpperCase().trim() || '';
   const typeParam = searchParams.get('type')?.toUpperCase();
@@ -45,6 +43,7 @@ function ActivateContent() {
 
   // Sync cardCode if URL param arrives late (Suspense boundary)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (codeFromUrl && !cardCode) setCardCode(codeFromUrl);
   }, [codeFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -359,7 +358,7 @@ function ActivateContent() {
                 className="w-full bg-[#141414] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-[#f2f0eb] placeholder:text-white/20 focus:outline-none focus:border-white/20"
               />
               <p className="text-[11px] text-[#f2f0eb]/25">
-                We'll send your sign-in link here after activation.
+                We&apos;ll send your sign-in link here after activation.
               </p>
             </div>
 
