@@ -37,8 +37,8 @@ export default function EnterpriseDashboardClient({ organizationName }: { organi
 
   useEffect(() => {
     document.title = 'PULSE | Enterprise Fleet Command';
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFleetData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleProvisionCard = async (e: React.FormEvent) => {

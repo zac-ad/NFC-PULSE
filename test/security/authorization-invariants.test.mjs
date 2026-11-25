@@ -53,7 +53,7 @@ test("viewer-session responses are explicitly non-cacheable", () => {
 test("vCard responses use a safe filename and are explicitly non-cacheable", () => {
   const source = read("app/api/vcard/[slug]/route.ts");
   assert.match(source, /const safeFilename = slug\.toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ''\)/);
-  assert.match(source, /filename=\\"\$\{safeFilename\}\.vcf\\"/);
+  assert.match(source, /filename="\$\{safeFilename\}\.vcf"/);
   assert.match(source, /response\.headers\.set\('Cache-Control', 'private, no-store, max-age=0'\)/);
 });
 
@@ -64,8 +64,8 @@ test("vCard rejects requests without a valid viewer session", () => {
 
 test("activation is rate-limited before the database operation", () => {
   const source = read("app/api/activate/route.ts");
-  const rateLimitIndex = source.indexOf("checkRateLimit");
-  const rpcIndex = source.indexOf("supabaseAdmin.rpc('activate_card'");
+  const rateLimitIndex = source.indexOf("if (!(await checkRateLimit");
+  const rpcIndex = source.indexOf("supabaseAdmin.rpc('create_activation_request'");
   assert.ok(rateLimitIndex >= 0);
   assert.ok(rpcIndex >= 0);
   assert.ok(rateLimitIndex < rpcIndex);
@@ -81,14 +81,19 @@ test("public media cannot be returned from the private bucket without a signed U
 });
 
 
-test("activation provisions a confirmed Auth user and login never creates one", () => {
+test("activation remains pending until email ownership is verified", () => {
   const activation = read("app/api/activate/route.ts");
-  assert.match(activation, /auth\\.admin\\.createUser\\(\\{[\\s\\S]*email,[\\s\\S]*email_confirm: true/);
-  assert.match(activation, /auth\\.admin\\.updateUserById\\([\\s\\S]*email_confirm: true/);
+  assert.match(activation, /issueVerificationToken/);
+  assert.match(activation, /create_activation_request/);
+  assert.doesNotMatch(activation, /activate_card/);
+  const verifyRoute = read("app/api/activate/verify/route.ts");
+  assert.match(verifyRoute, /consumeVerificationToken/);
+  const callback = read("app/auth/callback/route.ts");
+  assert.match(callback, /finalize_card_activation/);
+  assert.match(callback, /supabase\.auth\.getUser\(\)/);
 
   for (const path of [
     "app/login/page.tsx",
-    "app/activate/page.tsx",
     "app/portal/professional/login/page.tsx",
     "app/portal/personal/login/page.tsx",
   ]) {

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 
 // Slug rules: lowercase letters, numbers, hyphens only. No leading/trailing hyphens.
@@ -19,7 +18,6 @@ function sanitizeSlug(raw: string): string {
 function ActivateContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const supabase = createSupabaseBrowserClient();
 
   const codeFromUrl = searchParams.get('code')?.toUpperCase().trim() || '';
   const typeParam = searchParams.get('type')?.toUpperCase();
@@ -45,6 +43,7 @@ function ActivateContent() {
 
   // Sync cardCode if URL param arrives late (Suspense boundary)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (codeFromUrl && !cardCode) setCardCode(codeFromUrl);
   }, [codeFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -102,7 +101,7 @@ function ActivateContent() {
     setMessage(null);
 
     try {
-      // 1. Activate the card and create the profile
+      // Create a pending request only. The card stays unclaimed until email verification.
       const res = await fetch('/api/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,43 +117,16 @@ function ActivateContent() {
       });
 
       const json = await res.json();
-
       if (!res.ok) {
-        setMessage({ type: 'error', text: json.error || 'Activation failed. Please try again.' });
+        setMessage({ type: 'error', text: json.error || 'Activation request failed. Please try again.' });
         setLoading(false);
         return;
       }
 
-      // 2. Card is now active. Send a magic link so the user can log in.
-      //    This is the correct post-activation flow — activation creates the
-      //    account/profile/card binding but does NOT create a Supabase Auth
-      //    session. The magic link does.
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: typeof window !== 'undefined'
-            ? `${window.location.origin}/auth/callback?next=%2Fdashboard`
-            : undefined,
-        },
-      });
-
-      if (otpError) {
-        setLoginLinkSent(false);
-        // Card is already activated at this point — just tell them to log in manually
-        setMessage({
-          type: 'success',
-          text: 'Your card is active. We could not send the login email — go to the portal to sign in.',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 3. Success state — show the check-your-email screen
       setLoginLinkSent(true);
       setMessage({
         type: 'success',
-        text: `Your card is active. We sent a sign-in link to ${email.trim().toLowerCase()} — click it to reach your dashboard.`,
+        text: json.message || `Check your email at ${email.trim().toLowerCase()} to verify ownership and finish activating your card.`,
       });
 
     } catch {
@@ -255,9 +227,9 @@ function ActivateContent() {
             <div className="w-2 h-2 rounded-full bg-[#f2f0eb]/60" />
           </div>
           <div className="space-y-3">
-            <p className="font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">Card active</p>
+            <p className="font-mono text-[10px] text-[#f2f0eb]/25 tracking-widest uppercase">Activation pending</p>
             <h1 className="font-serif text-2xl text-[#f2f0eb]">
-              {loginLinkSent ? 'Check your email.' : 'Your card is active.'}
+              {loginLinkSent ? 'Check your email.' : 'Activation pending.'}
             </h1>
             <p className="text-[14px] text-[#f2f0eb]/40 leading-relaxed max-w-xs mx-auto">
               {message.text}
@@ -386,7 +358,7 @@ function ActivateContent() {
                 className="w-full bg-[#141414] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-[#f2f0eb] placeholder:text-white/20 focus:outline-none focus:border-white/20"
               />
               <p className="text-[11px] text-[#f2f0eb]/25">
-                We'll send your sign-in link here after activation.
+                We&apos;ll send your sign-in link here after activation.
               </p>
             </div>
 

@@ -498,6 +498,7 @@ function PublicProfilePageInner() {
     router.replace(`/p/${slug}`);
 
     // Initial validation
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     pingSession();
 
     // 5-minute recurring ping to refresh timer and re-check card status

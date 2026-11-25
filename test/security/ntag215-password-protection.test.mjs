@@ -17,10 +17,9 @@ test('NFC password is stored through Supabase Vault, not hardware_cards plaintex
   assert.match(migration, /vault\.update_secret/);
   assert.match(migration, /nfc_password_secret_id/);
   assert.doesNotMatch(migration, /nfc_password\s+text/i);
-  assert.match(migration, /revoke all on function public\.get_nfc_password\(uuid\) from public,anon,authenticated/);
+  assert.ok(migration.toLowerCase().includes('revoke all on function public.get_nfc_password(uuid) from public, anon, authenticated'));
   assert.match(migration, /grant execute on function public\.get_nfc_password\(uuid\) to service_role/);
 });
-
 test('admin route supports issue, retrieve, and physical protection state transitions', () => {
   for (const action of [
     'issue_nfc_password',

@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
 
 function AuthForm() {
   const supabase = createSupabaseBrowserClient();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const preset = searchParams.get('preset') || 'PROFESSIONAL';
 
   const [email, setEmail] = useState('');
