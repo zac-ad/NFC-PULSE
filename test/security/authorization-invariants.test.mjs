@@ -83,10 +83,11 @@ test("public media cannot be returned from the private bucket without a signed U
 
 test("activation remains pending until email ownership is verified", () => {
   const activation = read("app/api/activate/route.ts");
-  assert.match(activation, /email_confirm: false/);
-  assert.match(activation, /signInWithOtp/);
+  assert.match(activation, /issueVerificationToken/);
   assert.match(activation, /create_activation_request/);
   assert.doesNotMatch(activation, /activate_card/);
+  const verifyRoute = read("app/api/activate/verify/route.ts");
+  assert.match(verifyRoute, /consumeVerificationToken/);
   const callback = read("app/auth/callback/route.ts");
   assert.match(callback, /finalize_card_activation/);
   assert.match(callback, /supabase\.auth\.getUser\(\)/);

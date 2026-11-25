@@ -26,19 +26,17 @@ test("request API does not activate or mutate a hardware card directly", () => {
   const source = read("app/api/activate/route.ts");
   assert.doesNotMatch(source, /activate_card/);
   assert.doesNotMatch(source, /\.from\(['"]hardware_cards['"]\)\.(insert|update|upsert|delete)/);
-  assert.match(source, /signInWithOtp/);
-  assert.match(source, /email_confirm:\s*false/);
+  assert.match(source, /issueVerificationToken/);
+  assert.match(source, /sendActivationVerificationEmail/);
 });
 
 test("pending activation binds request id in HttpOnly callback cookie", () => {
   const source = read("app/api/activate/route.ts");
   assert.match(source, /pulse_activation_request/);
   assert.match(source, /httpOnly:\s*true/);
-  assert.match(source, /path:\s*'\/auth\/callback'/);
   assert.match(source, /maxAge:\s*30\s*\*\s*60/);
   assert.match(source, /response\.cookies\.set\([\s\S]*requestResult\.request_id/);
   assert.doesNotMatch(source, /response\.cookies\.set\([\s\S]*requestData\.request_id/);
-  assert.match(source, /searchParams\.set\(\x27request_id\x27, requestResult\.request_id\)/);
 });
 
 test("finalization callback exchanges Auth code and verifies session identity", () => {

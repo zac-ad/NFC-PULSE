@@ -1,9 +1,10 @@
-// Email-verified activation request endpoint. Cards remain unclaimed until callback finalization.
+// Email-verified activation request endpoint. Cards remain unclaimed until callback/token finalization.
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashActivationSecret } from '@/lib/activationSecret';
+import { issueVerificationToken } from '@/lib/activationVerification';
+import { sendActivationVerificationEmail } from '@/lib/email/activationEmail';
 
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -14,7 +15,9 @@ export async function POST(request: Request) {
   }
 
   let body: Record<string, unknown>;
-  try { body = await request.json(); } catch {
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
@@ -55,37 +58,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: requestResult?.error || 'Card could not be verified.' }, { status: 400 });
   }
 
-  // Create an unconfirmed Auth identity if the email is new. Existing identities are retained.
-  const { error: createUserError } = await supabaseAdmin.auth.admin.createUser({
-    email: cleanEmail,
-    email_confirm: false,
+  // Issue high-entropy single-use verification token (persists only SHA-256 hash)
+  const tokenResult = await issueVerificationToken(requestResult.request_id);
+  if (!tokenResult.success || !tokenResult.token) {
+    console.error('Failed to issue activation verification token:', tokenResult.error);
+    return NextResponse.json({ error: 'Could not generate verification email. Please try again.' }, { status: 503 });
+  }
+
+  // Construct dedicated PULSE verification URL
+  const host = request.headers.get('host') || 'localhost:3000';
+  const proto = request.headers.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  const origin = `${proto}://${host}`;
+  const verificationUrl = `${origin}/activate/verify?token=${encodeURIComponent(tokenResult.token)}`;
+
+  // Send activation verification email through provider abstraction
+  const emailResult = await sendActivationVerificationEmail({
+    to: cleanEmail,
+    fullName: cleanName,
+    verificationUrl,
+    expiresInMinutes: 30,
   });
-  if (createUserError && !/already registered|already exists|user already/i.test(createUserError.message)) {
-    console.error('Pending Auth user creation failed:', createUserError.message);
+
+  if (!emailResult.success) {
+    console.error('Activation verification email send failed:', emailResult.error);
     return NextResponse.json({ error: 'Could not send verification email. Please try again.' }, { status: 503 });
   }
 
-  const authClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
-    { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
-  );
-  const redirectTo = new URL('/auth/callback?flow=activation&next=%2Fdashboard', request.url);
-  redirectTo.searchParams.set('request_id', requestResult.request_id);
-  const { error: otpError } = await authClient.auth.signInWithOtp({
-    email: cleanEmail,
-    options: { shouldCreateUser: false, emailRedirectTo: redirectTo.toString() },
+  const response = NextResponse.json({
+    success: true,
+    message: 'Check your email to verify and finish activation.',
+    requestId: requestResult.request_id,
   });
 
-  if (otpError) {
-    console.error('Activation verification email send failed:', otpError.message);
-    return NextResponse.json({ error: 'Could not send verification email. Please try again.' }, { status: 503 });
-  }
-
-  const response = NextResponse.json({ success: true, message: 'Check your email to verify and finish activation.' });
+  // Bind pending request id in HttpOnly cookie for session association
   response.cookies.set('pulse_activation_request', requestResult.request_id, {
-    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
-    path: '/auth/callback', maxAge: 30 * 60,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 30 * 60,
   });
+
   return response;
 }
