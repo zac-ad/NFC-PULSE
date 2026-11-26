@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
-import { canonicalProfileMediaUrl, signedProfileMediaUrl } from '@/lib/profileMedia';
+import { canonicalProfileMediaUrl, getProfileMediaPath, signedProfileMediaUrl } from '@/lib/profileMedia';
 
 async function getUserEmail(request: Request): Promise<string | null> {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
@@ -57,10 +57,19 @@ export async function POST(request: Request) {
   const email = await getUserEmail(request);
   if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
   const { profile_id, title, url, type, position, visibility } = body;
   if (!profile_id || !title || !url) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+  }
+  if (type === 'qr' && !getProfileMediaPath(String(url))) {
+    return NextResponse.json(
+      { error: 'QR images must be uploaded to PULSE. Use the upload button instead of pasting an outside link.' },
+      { status: 400 }
+    );
   }
 
   const normalizedVisibility = type === 'qr' ? 'tap' : (visibility === 'tap' ? 'tap' : 'public');

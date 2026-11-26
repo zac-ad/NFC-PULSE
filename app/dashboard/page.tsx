@@ -63,15 +63,20 @@ async function getToken(): Promise<string | null> {
 async function apiCall(url: string, method: string, body?: object) {
   const token = await getToken();
   if (!token) return { error: 'Not authenticated' };
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const result = await res.json().catch(() => null);
+    return result ?? { error: `Request failed (HTTP ${res.status}). Please try again.` };
+  } catch {
+    return { error: 'Network error. Check your connection and try again.' };
+  }
 }
 
 function DashboardContent() {
@@ -338,7 +343,10 @@ function DashboardContent() {
       if (type === 'avatar') setAvatarUrl(result.publicUrl);
       if (type === 'banner') setBannerUrl(result.publicUrl);
       if (type === 'qr') setQrImageUrl(result.publicUrl);
-      setMessage({ type: 'success', text: 'File uploaded.' });
+      setMessage({
+        type: 'success',
+        text: type === 'qr' ? 'QR image uploaded. Add a title, then press Add QR.' : 'File uploaded.',
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       setMessage({ type: 'error', text: msg });
